@@ -122,7 +122,7 @@ docker build \
   docker/
 ```
 
-The image is automatically built and pushed to `ghcr.io/ddecoene/flux-worker` via GitHub Actions on every push to `main`.
+The pre-built image at `ghcr.io/ddecoene/flux-worker` is built from this repo's `main` branch. If you want to customize the worker or host your own image, fork this repo — GitHub Actions will build and push to your own `ghcr.io/<your-username>/flux-worker` automatically.
 
 ## License
 
