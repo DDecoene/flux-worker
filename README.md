@@ -41,6 +41,13 @@ flux-worker generate "a cyclist at golden hour" --output ./my-images/
 # Pass key explicitly
 flux-worker generate "a cyclist" \
   --vastai-key sk_xxx
+
+# Tune GPU selection
+flux-worker generate "a cyclist" \
+  --max-gpu-price 0.30 \
+  --min-vram-gb 24 \
+  --min-cuda-version 12.0 \
+  --disk-gb 50
 ```
 
 ### Python API
@@ -62,9 +69,12 @@ paths = generate([
 paths = generate(
     prompts=["a cyclist at golden hour"],
     output_dir="./images",
-    vastai_api_key="sk_xxx",   # or set VASTAI_API_KEY in .env
-    max_gpu_price=0.50,         # max $/hr
-    min_vram_gb=16,
+    vastai_api_key="sk_xxx",        # or set VASTAI_API_KEY in .env
+    max_gpu_price=0.50,             # max $/hr, default 0.50
+    min_vram_gb=16,                 # default 16
+    min_cuda_version=12.0,          # default 12.0
+    disk_gb=50,                     # default 50
+    ssh_key_path="~/.ssh/id_ed25519",
 )
 # returns list of Path objects
 ```
@@ -101,11 +111,30 @@ On Vast.ai, set `onstart` to:
 docker run --gpus all -e PROMPT="your prompt" -v /output:/output ghcr.io/ddecoene/flux-worker:latest
 ```
 
+## GPU Selection
+
+The client searches Vast.ai for the cheapest available GPU that meets the requirements. All parameters have sensible defaults for FLUX.1-schnell:
+
+| Parameter | CLI flag | Env var | Default | Notes |
+|---|---|---|---|---|
+| Max price | `--max-gpu-price` | `MAX_GPU_PRICE` | `0.50` | $/hr |
+| Min VRAM | `--min-vram-gb` | `MIN_VRAM_GB` | `16` | GB, minimum for FLUX float16 |
+| Min CUDA | `--min-cuda-version` | `MIN_CUDA_VERSION` | `12.0` | Older versions have bfloat16 issues |
+| Disk | `--disk-gb` | `DISK_GB` | `50` | GB allocated to instance |
+| SSH key | `--ssh-key-path` | `SSH_KEY_PATH` | `~/.ssh/id_ed25519` | Must be registered in Vast.ai account |
+
+GPUs with less than 16GB VRAM or CUDA < 12.0 are excluded automatically. V100s are avoided — no native bfloat16 and typically slow network on cheap hosts.
+
 ## Environment Variables
 
 | Variable | Description | Required |
 |---|---|---|
 | `VASTAI_API_KEY` | Vast.ai API key | Yes |
+| `MAX_GPU_PRICE` | Max $/hr for GPU instance | No (default: `0.50`) |
+| `MIN_VRAM_GB` | Minimum VRAM in GB | No (default: `16`) |
+| `MIN_CUDA_VERSION` | Minimum CUDA version | No (default: `12.0`) |
+| `DISK_GB` | Disk space allocated to instance | No (default: `50`) |
+| `SSH_KEY_PATH` | Path to SSH private key | No (default: `~/.ssh/id_ed25519`) |
 
 ## Building the Docker Image
 
