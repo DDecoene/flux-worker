@@ -14,7 +14,7 @@ def _headers(api_key: str) -> dict:
 
 def _raise_for_status(resp) -> None:
     try:
-        _raise_for_status(resp)
+        resp.raise_for_status()
     except requests.HTTPError:
         try:
             msg = resp.json().get("error") or resp.json().get("msg") or resp.text
