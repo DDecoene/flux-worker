@@ -1,6 +1,9 @@
 import time
+import traceback
 from pathlib import Path
 from flux_worker.config import load_config
+from flux_worker.exceptions import UserError, VastAIError
+from flux_worker.result import GenerateResult
 from flux_worker import vastai
 
 
@@ -13,57 +16,81 @@ def generate(
     min_vram_gb=None,
     min_cuda_version=None,
     disk_gb=None,
-) -> list:
+) -> GenerateResult:
     if isinstance(prompts, str):
         prompts = [prompts]
 
-    config = load_config(
-        vastai_api_key=vastai_api_key,
-        ssh_key_path=ssh_key_path,
-        max_gpu_price=max_gpu_price,
-        min_vram_gb=min_vram_gb,
-        min_cuda_version=min_cuda_version,
-        disk_gb=disk_gb,
-        output_dir=output_dir,
-    )
-    config.output_dir.mkdir(parents=True, exist_ok=True)
-
-    print(f"Finding GPU (max ${config.max_gpu_price}/hr, {config.min_vram_gb}GB VRAM)...")
-    offer = vastai.find_offer(
-        config.vastai_api_key,
-        config.max_gpu_price,
-        config.min_vram_gb,
-        config.min_cuda_version,
-    )
-    print(f"Found: {offer['gpu_name']} @ ${offer['dph_total']:.3f}/hr (id={offer['id']})")
-
-    instance_id = None
+    config = None
     try:
-        print("Renting instance...")
-        result = vastai.create_instance(
-            config.vastai_api_key,
-            offer["id"],
-            prompts,
-            config.disk_gb,
+        config = load_config(
+            vastai_api_key=vastai_api_key,
+            ssh_key_path=ssh_key_path,
+            max_gpu_price=max_gpu_price,
+            min_vram_gb=min_vram_gb,
+            min_cuda_version=min_cuda_version,
+            disk_gb=disk_gb,
+            output_dir=output_dir,
         )
-        instance_id = result["new_contract"]
-        print(f"Instance {instance_id} created. Waiting for SSH...")
+        config.output_dir.mkdir(parents=True, exist_ok=True)
 
-        host, port = _wait_for_running(config.vastai_api_key, instance_id)
-        vastai.wait_for_ssh(host, port, config.ssh_key_path)
-        print("SSH ready. Generating images...")
+        print(f"Finding GPU (max ${config.max_gpu_price}/hr, {config.min_vram_gb}GB VRAM)...")
+        offer = vastai.find_offer(
+            config.vastai_api_key,
+            config.max_gpu_price,
+            config.min_vram_gb,
+            config.min_cuda_version,
+        )
+        print(f"Found: {offer['gpu_name']} @ ${offer['dph_total']:.3f}/hr (id={offer['id']})")
 
-        paths = _poll_and_download(config, host, port, prompts)
-        return paths
+        instance_id = None
+        try:
+            print("Renting instance...")
+            result = vastai.create_instance(
+                config.vastai_api_key,
+                offer["id"],
+                prompts,
+                config.disk_gb,
+            )
+            instance_id = result["new_contract"]
+            print(f"Instance created. Waiting for SSH...")
 
-    finally:
-        if instance_id:
-            print(f"Destroying instance {instance_id}...")
-            try:
-                vastai.destroy_instance(config.vastai_api_key, instance_id)
-                print("Instance destroyed.")
-            except Exception as e:
-                print(f"Warning: failed to destroy instance {instance_id}: {e}")
+            host, port = _wait_for_running(config.vastai_api_key, instance_id)
+            vastai.wait_for_ssh(host, port, config.ssh_key_path)
+            print("SSH ready. Generating images...")
+
+            paths = _poll_and_download(config, host, port, prompts)
+            return GenerateResult(ok=True, images=paths)
+
+        finally:
+            if instance_id:
+                print("Destroying instance...")
+                try:
+                    vastai.destroy_instance(config.vastai_api_key, instance_id)
+                    print("Instance destroyed.")
+                except Exception as e:
+                    print(f"Warning: failed to destroy instance: {e}")
+
+    except UserError as e:
+        return GenerateResult(
+            ok=False,
+            error_type="user_error",
+            error_message=str(e),
+        )
+    except VastAIError as e:
+        return GenerateResult(
+            ok=False,
+            error_type="vastai_error",
+            error_message=str(e),
+        )
+    except Exception as e:
+        tb = traceback.format_exc()
+        return GenerateResult(
+            ok=False,
+            error_type="unexpected",
+            error_message=str(e),
+            traceback=tb,
+            config=config,
+        )
 
 
 def _wait_for_running(api_key: str, instance_id: int, timeout: int = 300):
