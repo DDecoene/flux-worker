@@ -2,6 +2,7 @@ import json
 import time
 import requests
 import paramiko
+from flux_worker.exceptions import VastAIError
 
 VASTAI_API = "https://console.vast.ai/api/v0"
 DOCKER_IMAGE = "ghcr.io/ddecoene/flux-worker:latest"
@@ -9,6 +10,17 @@ DOCKER_IMAGE = "ghcr.io/ddecoene/flux-worker:latest"
 
 def _headers(api_key: str) -> dict:
     return {"Authorization": f"Bearer {api_key}"}
+
+
+def _raise_for_status(resp) -> None:
+    try:
+        _raise_for_status(resp)
+    except requests.HTTPError:
+        try:
+            msg = resp.json().get("error") or resp.json().get("msg") or resp.text
+        except Exception:
+            msg = resp.text
+        raise VastAIError(f"Vast.ai error: {msg}")
 
 
 def find_offer(api_key: str, max_price: float, min_vram_gb: int, min_cuda: float) -> dict:
@@ -27,7 +39,7 @@ def find_offer(api_key: str, max_price: float, min_vram_gb: int, min_cuda: float
         headers=_headers(api_key),
         params={"q": json.dumps(params)},
     )
-    resp.raise_for_status()
+    _raise_for_status(resp)
     offers = resp.json().get("offers", [])
     if not offers:
         raise RuntimeError(
@@ -58,14 +70,14 @@ def create_instance(api_key: str, offer_id: int, prompts: list, disk_gb: int) ->
         headers=_headers(api_key),
         json=payload,
     )
-    resp.raise_for_status()
+    _raise_for_status(resp)
     return resp.json()
 
 
 def get_instance(api_key: str, instance_id: int) -> dict | None:
     """Return instance dict or None if not found."""
     resp = requests.get(f"{VASTAI_API}/instances/", headers=_headers(api_key))
-    resp.raise_for_status()
+    _raise_for_status(resp)
     instances = resp.json().get("instances", [])
     for inst in instances:
         if inst["id"] == instance_id:
@@ -75,7 +87,7 @@ def get_instance(api_key: str, instance_id: int) -> dict | None:
 
 def destroy_instance(api_key: str, instance_id: int) -> None:
     resp = requests.delete(f"{VASTAI_API}/instances/{instance_id}/", headers=_headers(api_key))
-    resp.raise_for_status()
+    _raise_for_status(resp)
 
 
 def _ssh_client(host: str, port: int, key_path) -> paramiko.SSHClient:
