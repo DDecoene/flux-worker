@@ -1,0 +1,129 @@
+# flux-worker
+
+Generate images with [FLUX.1-schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell) on ephemeral Vast.ai GPUs. Model weights are baked into the Docker image — no Hugging Face downloads at runtime.
+
+## Features
+
+- **Zero cold-start downloads** — weights pre-baked into Docker image (~30GB)
+- **Simple interface** — prompt in, image file out
+- **Agent-friendly Python API** — call from code or AI agents
+- **CLI** — run from terminal with `.env` support
+- **Batch generation** — pass multiple prompts or a JSON file
+- **Cheap** — spins up GPU, generates, destroys. Pay only for what you use (~$0.05/image)
+
+## Quick Start
+
+```bash
+pip install flux-worker
+```
+
+Set your keys in `.env` or pass them directly:
+
+```bash
+VASTAI_API_KEY=your_key
+HF_TOKEN=your_hf_token   # optional, model is public
+```
+
+### CLI
+
+```bash
+# Single prompt
+flux-worker generate "a cyclist at golden hour in the Flemish polders"
+
+# Multiple prompts
+flux-worker generate "prompt one" "prompt two" "prompt three"
+
+# From JSON file
+flux-worker generate --prompts-file prompts.json
+
+# Custom output directory
+flux-worker generate "a cyclist at golden hour" --output ./my-images/
+
+# Pass keys explicitly
+flux-worker generate "a cyclist" \
+  --vastai-key sk_xxx \
+  --hf-token hf_xxx
+```
+
+### Python API
+
+```python
+from flux_worker import generate
+
+# Single image
+paths = generate("a cyclist at golden hour in the Flemish polders")
+
+# Batch
+paths = generate([
+    "a cyclist at golden hour in the Flemish polders",
+    "a runner in the rain, cinematic lighting",
+    "a swimmer at sunrise, aerial view",
+])
+
+# All options
+paths = generate(
+    prompts=["a cyclist at golden hour"],
+    output_dir="./images",
+    vastai_api_key="sk_xxx",   # or set VASTAI_API_KEY in .env
+    hf_token="hf_xxx",          # or set HF_TOKEN in .env
+    max_gpu_price=0.50,         # max $/hr
+    min_vram_gb=16,
+)
+# returns list of Path objects
+```
+
+### prompts.json format
+
+```json
+["prompt one", "prompt two", "prompt three"]
+```
+
+## How It Works
+
+1. Client finds cheapest available Vast.ai GPU
+2. Rents instance with pre-built Docker image (`ghcr.io/ddecoene/flux-worker`)
+3. Docker image runs immediately — no downloads, no setup
+4. Worker generates images from prompts, saves to `/output/`
+5. Client downloads images via SSH
+6. GPU instance is destroyed
+
+Total time: ~3-5 minutes for first image, ~30 seconds per additional image.
+
+## Using the Docker Image Directly
+
+```bash
+# On any CUDA machine
+docker run --gpus all \
+  -e PROMPT="a cyclist at golden hour" \
+  -v $(pwd)/output:/output \
+  ghcr.io/ddecoene/flux-worker:latest
+```
+
+On Vast.ai, set `onstart` to:
+```
+docker run --gpus all -e PROMPT="your prompt" -v /output:/output ghcr.io/ddecoene/flux-worker:latest
+```
+
+## Environment Variables
+
+| Variable | Description | Required |
+|---|---|---|
+| `VASTAI_API_KEY` | Vast.ai API key | Yes |
+| `HF_TOKEN` | Hugging Face token | No (model is public) |
+
+## Building the Docker Image
+
+The Docker image pre-bakes FLUX.1-schnell weights at build time. This requires ~30GB disk space and a Hugging Face token.
+
+```bash
+docker build \
+  --build-arg HF_TOKEN=your_hf_token \
+  -t flux-worker \
+  docker/
+```
+
+The image is automatically built and pushed to `ghcr.io/ddecoene/flux-worker` via GitHub Actions on every push to `main`.
+
+## License
+
+Apache-2.0
