@@ -24,7 +24,8 @@ Choose based on how you want to use it:
 If you just want to run `flux-worker` from the terminal:
 
 ```bash
-brew install ddecoene/tap/flux-worker
+brew tap ddecoene/tap
+brew install flux-worker
 ```
 
 No Python setup required. Then add your key:

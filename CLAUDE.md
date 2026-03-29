@@ -11,7 +11,7 @@ A Python package + Docker image for generating images with FLUX.1-schnell on eph
 
 - Simple, agent-friendly API: `generate(prompts) -> list[Path]`
 - Zero runtime downloads (weights in Docker image)
-- CLI users install via Homebrew (`brew install ddecoene/tap/flux-worker`)
+- CLI users install via Homebrew (`brew tap ddecoene/tap && brew install flux-worker`)
 - Python/agent users install via pip or pipx (`pip install flux-worker`)
 - Also used internally by `social-agent` project
 
