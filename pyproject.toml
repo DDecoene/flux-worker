@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flux-worker"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+    "paramiko>=3.0",
+]
+
+[project.scripts]
+flux-worker = "flux_worker.cli:cli"
