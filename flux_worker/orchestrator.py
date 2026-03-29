@@ -93,7 +93,7 @@ def generate(
         )
 
 
-def _wait_for_running(api_key: str, instance_id: int, timeout: int = 300):
+def _wait_for_running(api_key: str, instance_id: int, timeout: int = 900):
     """Poll until instance is running, return (host, port)."""
     deadline = time.time() + timeout
     while time.time() < deadline:
