@@ -93,12 +93,18 @@ def generate(
         )
 
 
-def _wait_for_running(api_key: str, instance_id: int, timeout: int = 900):
+def _wait_for_running(api_key: str, instance_id: int, timeout: int = 1800):
     """Poll until instance is running, return (host, port)."""
     deadline = time.time() + timeout
+    last_status = None
     while time.time() < deadline:
         inst = vastai.get_instance(api_key, instance_id)
-        if inst and inst.get("actual_status") == "running":
+        status = inst.get("actual_status") if inst else None
+        if status != last_status:
+            elapsed = int(timeout - (deadline - time.time()))
+            print(f"  Instance status: {status} ({elapsed}s elapsed)")
+            last_status = status
+        if status == "running":
             return inst["ssh_host"], inst["ssh_port"]
         time.sleep(5)
     raise TimeoutError(f"Instance {instance_id} did not reach running state after {timeout}s")
