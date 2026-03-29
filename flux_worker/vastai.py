@@ -31,6 +31,7 @@ def find_offer(api_key: str, max_price: float, min_vram_gb: int, min_cuda: float
         "dph_total": {"lte": max_price},
         "cuda_vers": {"gte": min_cuda},
         "gpu_name": {"notin": ["Tesla V100", "Tesla V100-SXM2-16GB", "Tesla V100-PCIE-16GB"]},
+        "inet_down": {"gte": 300},  # min 300 Mbps download — needed to pull 30GB image in time
         "order": [["dph_total", "asc"]],
         "limit": 10,
     }
