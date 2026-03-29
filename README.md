@@ -2,26 +2,76 @@
 
 Generate images with [FLUX.1-schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell) on ephemeral Vast.ai GPUs. Model weights are baked into the Docker image — no Hugging Face downloads at runtime.
 
-## Features
-
 - **Zero cold-start downloads** — weights pre-baked into Docker image (~30GB)
 - **Simple interface** — prompt in, image file out
-- **Agent-friendly Python API** — call from code or AI agents
-- **CLI** — run from terminal with `.env` support
-- **Batch generation** — pass multiple prompts or a JSON file
+- **Batch generation** — pass multiple prompts, all run on the same GPU before it's destroyed
 - **Cheap** — spins up GPU, generates, destroys. Pay only for what you use (~$0.05/image)
 
-## Quick Start
+## Prerequisites
+
+Before any install method will work, you need:
+
+1. **A Vast.ai account** — [console.vast.ai](https://console.vast.ai)
+2. **A Vast.ai API key** — found in Account settings
+3. **Your SSH public key registered in Vast.ai** — Account → SSH Keys. This is how the client connects to the GPU instance. Your local `~/.ssh/id_ed25519` (or `id_rsa`) must be listed there.
+
+## Installation
+
+Choose based on how you want to use it:
+
+### CLI tool — use Homebrew (macOS)
+
+If you just want to run `flux-worker` from the terminal:
 
 ```bash
+brew install ddecoene/tap/flux-worker
+```
+
+No Python setup required. Then add your key:
+
+```bash
+export VASTAI_API_KEY=your_key
+# or put it in ~/.config/flux-worker/.env
+```
+
+### Python library or agentic use — use pip or pipx
+
+If you're calling `flux-worker` from Python code, an AI agent, or want to use it as a library:
+
+```bash
+# pipx: isolated install, still gives you the CLI too
+pipx install flux-worker
+
+# pip: install into your project's environment
 pip install flux-worker
 ```
 
-Set your Vast.ai key in `.env` or pass it directly:
+**Use this if:**
+- You're building an agent that generates images (e.g. with Claude, LangChain, etc.)
+- You're calling `from flux_worker import generate` in Python
+- You're integrating it into a larger pipeline
 
-```bash
-VASTAI_API_KEY=your_key
+### Claude Code agent tool
+
+To give Claude access to flux-worker, add it to your `CLAUDE.md` or system prompt:
+
 ```
+You have access to flux-worker for generating images.
+Use the bash tool to run: flux-worker generate "<prompt>"
+Images are saved to ./output/ by default.
+```
+
+Or call it directly from Python in a tool definition:
+
+```python
+from flux_worker import generate
+
+def generate_image(prompt: str) -> str:
+    paths = generate(prompt)
+    return str(paths[0])
+```
+
+## Usage
 
 ### CLI
 
@@ -29,7 +79,7 @@ VASTAI_API_KEY=your_key
 # Single prompt
 flux-worker generate "a cyclist at golden hour in the Flemish polders"
 
-# Multiple prompts
+# Multiple prompts (all generated on one GPU instance)
 flux-worker generate "prompt one" "prompt two" "prompt three"
 
 # From JSON file
@@ -38,16 +88,10 @@ flux-worker generate --prompts-file prompts.json
 # Custom output directory
 flux-worker generate "a cyclist at golden hour" --output ./my-images/
 
-# Pass key explicitly
-flux-worker generate "a cyclist" \
-  --vastai-key sk_xxx
-
 # Tune GPU selection
 flux-worker generate "a cyclist" \
   --max-gpu-price 0.30 \
-  --min-vram-gb 24 \
-  --min-cuda-version 12.0 \
-  --disk-gb 50
+  --min-vram-gb 24
 ```
 
 ### Python API
@@ -58,7 +102,7 @@ from flux_worker import generate
 # Single image
 paths = generate("a cyclist at golden hour in the Flemish polders")
 
-# Batch
+# Batch — all on one GPU instance
 paths = generate([
     "a cyclist at golden hour in the Flemish polders",
     "a runner in the rain, cinematic lighting",
@@ -87,7 +131,7 @@ paths = generate(
 
 ## How It Works
 
-1. Client finds cheapest available Vast.ai GPU
+1. Client finds cheapest available Vast.ai GPU matching your requirements
 2. Rents instance with pre-built Docker image (`ghcr.io/ddecoene/flux-worker`)
 3. Docker image runs immediately — no downloads, no setup
 4. Worker generates images from prompts, saves to `/output/`
@@ -95,21 +139,6 @@ paths = generate(
 6. GPU instance is destroyed
 
 Total time: ~3-5 minutes for first image, ~30 seconds per additional image.
-
-## Using the Docker Image Directly
-
-```bash
-# On any CUDA machine
-docker run --gpus all \
-  -e PROMPT="a cyclist at golden hour" \
-  -v $(pwd)/output:/output \
-  ghcr.io/ddecoene/flux-worker:latest
-```
-
-On Vast.ai, set `onstart` to:
-```
-docker run --gpus all -e PROMPT="your prompt" -v /output:/output ghcr.io/ddecoene/flux-worker:latest
-```
 
 ## GPU Selection
 
@@ -127,6 +156,8 @@ GPUs with less than 16GB VRAM or CUDA < 12.0 are excluded automatically. V100s a
 
 ## Environment Variables
 
+Place these in a `.env` file in your working directory, or export them in your shell.
+
 | Variable | Description | Required |
 |---|---|---|
 | `VASTAI_API_KEY` | Vast.ai API key | Yes |
@@ -136,11 +167,23 @@ GPUs with less than 16GB VRAM or CUDA < 12.0 are excluded automatically. V100s a
 | `DISK_GB` | Disk space allocated to instance | No (default: `50`) |
 | `SSH_KEY_PATH` | Path to SSH private key | No (default: `~/.ssh/id_ed25519`) |
 
-## Building the Docker Image
+## Using the Docker Image Directly
 
-Only needed if you've forked the repo and want to build your own image. The pre-built `ghcr.io/ddecoene/flux-worker` image already has weights baked in — no Hugging Face account required to use it.
+```bash
+# On any CUDA machine
+docker run --gpus all \
+  -e PROMPT="a cyclist at golden hour" \
+  -v $(pwd)/output:/output \
+  ghcr.io/ddecoene/flux-worker:latest
+```
 
-Building requires ~30GB disk space and a Hugging Face token (to download the weights at build time).
+## Building Your Own Image
+
+Only needed if you've forked the repo and want to customize the worker. The pre-built `ghcr.io/ddecoene/flux-worker` already has weights baked in — no Hugging Face account required to use it.
+
+Fork this repo — GitHub Actions will build and push to your own `ghcr.io/<your-username>/flux-worker` automatically on every push to `main`.
+
+To build locally (requires ~30GB disk and a Hugging Face token):
 
 ```bash
 docker build \
@@ -148,8 +191,6 @@ docker build \
   -t flux-worker \
   docker/
 ```
-
-The pre-built image at `ghcr.io/ddecoene/flux-worker` is built from this repo's `main` branch. If you want to customize the worker or host your own image, fork this repo — GitHub Actions will build and push to your own `ghcr.io/<your-username>/flux-worker` automatically.
 
 ## License
 
