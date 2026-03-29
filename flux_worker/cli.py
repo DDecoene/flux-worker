@@ -29,7 +29,7 @@ def generate_cmd(prompts, prompts_file, output, vastai_key, max_gpu_price, min_v
     if not all_prompts:
         raise click.UsageError("Provide at least one prompt or --prompts-file.")
 
-    paths = generate(
+    result = generate(
         prompts=all_prompts,
         output_dir=output,
         vastai_api_key=vastai_key,
@@ -39,8 +39,33 @@ def generate_cmd(prompts, prompts_file, output, vastai_key, max_gpu_price, min_v
         disk_gb=disk_gb,
         ssh_key_path=ssh_key_path,
     )
-    for p in paths:
-        click.echo(str(p))
+
+    if result.ok:
+        for p in result.images:
+            click.echo(str(p))
+        return
+
+    # Handle errors
+    if result.error_type == "user_error":
+        click.echo(f"\n✗ {result.error_message}", err=True)
+        raise SystemExit(1)
+
+    if result.error_type == "vastai_error":
+        click.echo(f"\n✗ {result.error_message}", err=True)
+        click.echo("  → https://console.vast.ai", err=True)
+        raise SystemExit(1)
+
+    # Unexpected error — show message and file bug report
+    click.echo(f"\n✗ Unexpected error: {result.error_message}", err=True)
+    click.echo("\n  Filing bug report...", err=True)
+
+    from flux_worker.bug_report import file_report
+    report = file_report(result.error_message, result.traceback, result.config)
+
+    if "issue_url" in report:
+        click.echo(f"\n  Bug report filed: {report['issue_url']}", err=True)
+    click.echo(f"\n  Or report manually: {report['fallback_url']}", err=True)
+    raise SystemExit(1)
 
 
 cli.add_command(generate_cmd, name="generate")
