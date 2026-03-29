@@ -67,10 +67,17 @@ docker/
 
 ## GPU Requirements
 
-- Min 16GB VRAM for FLUX.1-schnell with float16
-- Prefer `cuda_vers gte 12.0`
-- Max $0.50/hr default, configurable
-- Avoid V100 — no native float16 bfloat16, slow network on cheap hosts
+All configurable with sensible defaults:
+
+| Parameter | Default | Env var | Notes |
+|---|---|---|---|
+| Max price | `0.50` $/hr | `MAX_GPU_PRICE` | |
+| Min VRAM | `16` GB | `MIN_VRAM_GB` | Minimum for FLUX float16 |
+| Min CUDA | `12.0` | `MIN_CUDA_VERSION` | Older versions lack bfloat16 |
+| Disk | `50` GB | `DISK_GB` | |
+| SSH key | `~/.ssh/id_ed25519` | `SSH_KEY_PATH` | Fall back to `~/.ssh/id_rsa` |
+
+- Avoid V100 — no native bfloat16, slow network on cheap hosts
 
 ## Worker Interface
 
@@ -90,9 +97,14 @@ Default: `~/.ssh/id_ed25519` (fall back to `~/.ssh/id_rsa`). Configurable via `s
 
 ```
 VASTAI_API_KEY=
-HF_TOKEN=
 SSH_KEY_PATH=~/.ssh/id_ed25519
+MAX_GPU_PRICE=0.50
+MIN_VRAM_GB=16
+MIN_CUDA_VERSION=12.0
+DISK_GB=50
 ```
+
+`HF_TOKEN` is only needed when building the Docker image (bakes weights at build time). Not required at runtime.
 
 ## Installation for Development
 
