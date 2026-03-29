@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from dotenv import load_dotenv
+from flux_worker.exceptions import UserError
 
 load_dotenv()
 
@@ -26,7 +27,10 @@ def load_config(
 ) -> Config:
     api_key = vastai_api_key or os.environ.get("VASTAI_API_KEY")
     if not api_key:
-        raise ValueError("VASTAI_API_KEY is required. Set it in .env or pass vastai_api_key=.")
+        raise UserError(
+            "Missing VASTAI_API_KEY.\n"
+            "  Set it in .env or pass --vastai-key."
+        )
 
     # SSH key: try explicit, then env, then id_ed25519, then id_rsa
     if ssh_key_path:
@@ -39,10 +43,10 @@ def load_config(
             key = Path("~/.ssh/id_rsa").expanduser()
 
     if not key.exists():
-        raise FileNotFoundError(
-            f"SSH key not found at {key}. "
-            "Create one or set SSH_KEY_PATH. "
-            "The key must be registered in your Vast.ai account settings."
+        raise UserError(
+            f"SSH key not found at {key}.\n"
+            "  Create one or set SSH_KEY_PATH.\n"
+            "  The key must be registered in your Vast.ai account: https://console.vast.ai/account/"
         )
 
     return Config(
