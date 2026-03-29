@@ -59,12 +59,6 @@ def create_instance(api_key: str, offer_id: int, prompts: list, disk_gb: int) ->
         "env": {
             "PROMPTS": json.dumps(prompts),
         },
-        "onstart": (
-            "docker run --gpus all "
-            "-e PROMPTS=\"$PROMPTS\" "
-            "-v /output:/output "
-            f"{DOCKER_IMAGE}"
-        ),
     }
     resp = requests.put(
         f"{VASTAI_API}/asks/{offer_id}/",
