@@ -17,11 +17,10 @@ Generate images with [FLUX.1-schnell](https://huggingface.co/black-forest-labs/F
 pip install flux-worker
 ```
 
-Set your keys in `.env` or pass them directly:
+Set your Vast.ai key in `.env` or pass it directly:
 
 ```bash
 VASTAI_API_KEY=your_key
-HF_TOKEN=your_hf_token   # optional, model is public
 ```
 
 ### CLI
@@ -39,10 +38,9 @@ flux-worker generate --prompts-file prompts.json
 # Custom output directory
 flux-worker generate "a cyclist at golden hour" --output ./my-images/
 
-# Pass keys explicitly
+# Pass key explicitly
 flux-worker generate "a cyclist" \
-  --vastai-key sk_xxx \
-  --hf-token hf_xxx
+  --vastai-key sk_xxx
 ```
 
 ### Python API
@@ -65,7 +63,6 @@ paths = generate(
     prompts=["a cyclist at golden hour"],
     output_dir="./images",
     vastai_api_key="sk_xxx",   # or set VASTAI_API_KEY in .env
-    hf_token="hf_xxx",          # or set HF_TOKEN in .env
     max_gpu_price=0.50,         # max $/hr
     min_vram_gb=16,
 )
@@ -109,11 +106,12 @@ docker run --gpus all -e PROMPT="your prompt" -v /output:/output ghcr.io/ddecoen
 | Variable | Description | Required |
 |---|---|---|
 | `VASTAI_API_KEY` | Vast.ai API key | Yes |
-| `HF_TOKEN` | Hugging Face token | No (model is public) |
 
 ## Building the Docker Image
 
-The Docker image pre-bakes FLUX.1-schnell weights at build time. This requires ~30GB disk space and a Hugging Face token.
+Only needed if you've forked the repo and want to build your own image. The pre-built `ghcr.io/ddecoene/flux-worker` image already has weights baked in — no Hugging Face account required to use it.
+
+Building requires ~30GB disk space and a Hugging Face token (to download the weights at build time).
 
 ```bash
 docker build \
