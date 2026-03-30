@@ -108,6 +108,16 @@ def find_resumable_instance(api_key: str) -> dict | None:
     return None
 
 
+def update_instance_env(api_key: str, instance_id: int, env: dict) -> None:
+    """Update env vars on a running instance (used to patch CALLBACK_URL on resume)."""
+    resp = requests.put(
+        f"{VASTAI_API}/instances/{instance_id}/",
+        headers=_headers(api_key),
+        json={"env": env},
+    )
+    _raise_for_status(resp)
+
+
 def destroy_instance(api_key: str, instance_id: int) -> None:
     resp = requests.delete(f"{VASTAI_API}/instances/{instance_id}/", headers=_headers(api_key))
     _raise_for_status(resp)

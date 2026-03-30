@@ -60,6 +60,20 @@ def generate(
         callback_url = tunnel.start(port)
         print(f"Callback URL: {callback_url}")
 
+        if resumable:
+            # GPU has old tunnel URL in its env — update it so the next /ready retry reaches us
+            print("Updating instance CALLBACK_URL to new tunnel...")
+            try:
+                vastai.update_instance_env(
+                    config.vastai_api_key,
+                    instance_id,
+                    {"CALLBACK_URL": callback_url, "CALLBACK_TOKEN": token},
+                )
+                print("Instance env updated. Waiting for GPU to retry /ready...")
+            except Exception as e:
+                print(f"Warning: could not update instance env: {e}")
+                print("GPU may not be able to reach new tunnel URL.")
+
         if not resumable:
             print(f"Finding GPU (max ${config.max_gpu_price}/hr, {config.min_vram_gb}GB VRAM)...")
             offer = vastai.find_offer(
