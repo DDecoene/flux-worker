@@ -17,8 +17,7 @@ def cli():
 @click.option("--min-vram-gb", type=int, envvar="MIN_VRAM_GB", help="Min VRAM in GB (default: 16)")
 @click.option("--min-cuda-version", type=float, envvar="MIN_CUDA_VERSION", help="Min CUDA version (default: 12.0)")
 @click.option("--disk-gb", type=int, envvar="DISK_GB", help="Disk GB for instance (default: 50)")
-@click.option("--ssh-key-path", envvar="SSH_KEY_PATH", help="SSH private key path")
-def generate_cmd(prompts, prompts_file, output, vastai_key, max_gpu_price, min_vram_gb, min_cuda_version, disk_gb, ssh_key_path):
+def generate_cmd(prompts, prompts_file, output, vastai_key, max_gpu_price, min_vram_gb, min_cuda_version, disk_gb):
     """Generate images from one or more prompts."""
     if prompts_file:
         with open(prompts_file) as f:
@@ -37,7 +36,6 @@ def generate_cmd(prompts, prompts_file, output, vastai_key, max_gpu_price, min_v
         min_vram_gb=min_vram_gb,
         min_cuda_version=min_cuda_version,
         disk_gb=disk_gb,
-        ssh_key_path=ssh_key_path,
     )
 
     if result.ok:
