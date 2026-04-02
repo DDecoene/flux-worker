@@ -4,13 +4,14 @@
 
 A Python package + Docker image for generating images with FLUX.1-schnell on ephemeral Vast.ai GPUs. Two components:
 
-1. **Docker image** (`docker/`) — runs on the GPU instance, weights pre-baked in
+1. **Docker image** (`docker/`) — runs on the GPU instance, weights pre-baked in, exposes HTTP API
 2. **Python client** (`flux_worker/`) — orchestrates Vast.ai lifecycle, installable via pip
 
 ## Project Goals
 
 - Simple, agent-friendly API: `generate(prompts) -> list[Path]`
 - Zero runtime downloads (weights in Docker image)
+- Resume-on-restart: if orchestrator crashes, restart it and it reconnects to the existing GPU instance
 - CLI users install via Homebrew (`brew tap ddecoene/tap && brew install flux-worker`)
 - Python/agent users install via pip or pipx (`pip install flux-worker`)
 - Also used internally by `social-agent` project
@@ -30,22 +31,100 @@ A Python package + Docker image for generating images with FLUX.1-schnell on eph
 flux_worker/
 ├── __init__.py       # public API: generate()
 ├── cli.py            # Click CLI entry point
-├── orchestrator.py   # top-level flow: find GPU → rent → run → download → destroy
-└── vastai.py         # Vast.ai API calls (find offer, create/destroy instance, SSH/SCP)
+├── orchestrator.py   # top-level flow: find/resume GPU → poll worker → generate → destroy
+├── vastai.py         # Vast.ai API calls (find offer, create/destroy instance, port lookup)
+├── config.py         # Config dataclass + env loading
+├── result.py         # GenerateResult dataclass
+├── exceptions.py     # UserError, VastAIError
+└── bug_report.py     # auto-file GitHub issues on unexpected errors
 
 docker/
-├── Dockerfile        # nvidia/cuda base + deps + model weights baked in
-└── worker.py         # runs inside container: reads PROMPT env var, writes /output/image.png
+├── Dockerfile        # nvidia/cuda base + deps + model weights baked in, EXPOSE 5000
+└── worker.py         # HTTP server: GET /health, POST /generate
 
 .github/workflows/
 └── build.yml         # builds Docker image and pushes to ghcr.io on push to main
 ```
 
+## How It Works — The Full Flow
+
+### Normal flow (no existing instance)
+
+```
+1. orchestrator.generate(prompts) called
+2. load_config() reads .env + params
+3. find_resumable_instance() → None (no existing instance)
+4. find_offer() → cheapest GPU meeting requirements
+5. create_instance() → rents GPU, passes WORKER_TOKEN env var
+   Instance starts: Vast.ai pulls Docker image (5-15 min)
+6. _wait_for_worker() polls:
+   - GET /instances/ → wait for actual_status == "running"
+   - Extract worker URL from instance port mapping
+   - GET {worker_url}/health → wait for 200 (model loading, ~60s)
+   - While waiting: poll instance logs and print [gpu] lines
+7. _generate_images() for each prompt:
+   - POST {worker_url}/generate {prompt, index}
+   - Worker generates image (~30s), returns base64 PNG in response
+   - Orchestrator decodes and saves to output_dir/image_{i}.png
+8. finally: destroy_instance() — always, even on crash
+```
+
+### Resume flow (orchestrator crashed and restarted)
+
+```
+1. orchestrator.generate(prompts) called
+2. find_resumable_instance() → finds instance with label "flux-worker-token:{uuid}"
+   Extracts token from label, reuses instance_id
+3. _wait_for_worker():
+   - Instance may still be loading (pulling image) → keeps polling
+   - Instance may be running with model loaded → /health returns 200 immediately
+   - Instance may be running, model still loading → /health times out, retry
+4. Once /health returns 200 → proceed with _generate_images()
+5. finally: destroy_instance()
+```
+
+**Why resume works:** The orchestrator connects TO the worker (not the other way around). The worker's IP/port is stable — it comes from the Vast.ai API. No tunnel URLs to go stale.
+
+**Why we chose this over callbacks:** Vast.ai has no API to update env vars on a running/loading instance. A callback model requires the GPU to know the orchestrator's URL, which changes on restart (cloudflared tunnels are ephemeral). By reversing the direction, the orchestrator looks up the worker's address from Vast.ai every time.
+
+### Instance labeling
+
+Every instance is created with label `flux-worker-token:{uuid}`. This serves two purposes:
+1. **Resume detection**: `find_resumable_instance()` looks for instances with this label prefix
+2. **Auth token**: the UUID is passed as `WORKER_TOKEN` env var and used as Bearer token for all HTTP requests to the worker
+
+## Worker Interface (docker/worker.py)
+
+The worker is an HTTP server on port 5000 inside the container.
+
+### Endpoints
+
+| Endpoint | Method | Auth | Request | Response |
+|---|---|---|---|---|
+| `/health` | GET | Bearer token | — | `{"status": "ready"}` |
+| `/generate` | POST | Bearer token | `{"prompt": "...", "index": 0}` | `{"image_b64": "...", "index": 0}` |
+
+### Startup sequence
+
+1. Load FLUX model into GPU memory (~60s)
+2. Start HTTP server on `0.0.0.0:5000`
+3. Server blocks on `serve_forever()` — handles one request at a time
+
+**Note:** `/health` only returns 200 AFTER the model is loaded. The server doesn't start until model loading is complete. This means "healthy" = "ready to generate".
+
+### Env vars (set at instance creation)
+
+| Var | Required | Description |
+|---|---|---|
+| `WORKER_TOKEN` | Yes | Bearer token for auth |
+| `WORKER_PORT` | No | HTTP port (default: 5000) |
+| `OUTPUT_DIR` | No | Image save dir (default: `/output`) |
+
 ## Key Design Decisions
 
 - **Weights in Docker image**: avoids HF download at runtime. Build arg `HF_TOKEN` used at build time only.
-- **SSH key**: user's local SSH key (~/.ssh/id_ed25519 or configured) must be registered in Vast.ai account. No secrets passed to instances.
-- **Images downloaded via SSH**: orchestrator SSH-cats `/output/image.png` from instance to local machine. No SCP instability.
+- **Orchestrator-polls-worker model**: orchestrator connects to worker HTTP API using IP/port from Vast.ai API. No SSH, no tunnels, no callback URLs. Enables resume because the worker's address is always discoverable.
+- **Token auth via instance label**: the auth token is embedded in the instance label, so the orchestrator can recover it on resume without needing to store state locally.
 - **Always destroy**: GPU instance always destroyed in `finally` block, even on crash.
 - **Batch on one instance**: if multiple prompts, generate all on the same instance before destroying.
 - **No pytest/unit tests**: manual/live testing only. Test by actually running against Vast.ai.
@@ -56,15 +135,26 @@ docker/
 - Endpoint: `https://console.vast.ai/api/v0`
 - Auth: `Authorization: Bearer <api_key>`
 - Find offers: `GET /bundles` with query params
-- Create instance: `PUT /asks/{offer_id}/` with `{"image": ..., "env": {...}, "disk": 50, "onstart": "..."}`
+- Create instance: `PUT /asks/{offer_id}/` with `{"image": ..., "env": {...}, "disk": 50, "label": "..."}`
 - `env` field = JSON dict (NOT Docker flags string)
 - Instance status: `GET /instances/` returns `{"instances": [...]}`
+- Instance logs: `GET /instances/{id}/logs` returns `{"logs": "..."}`
+- Reboot (stop+start container): `PUT /instances/reboot/{id}/`
 - Destroy: `DELETE /instances/{id}/`
-- SSH keys registered in Vast.ai account are auto-injected into instances
-- Instance status goes: None → loading → running
-- SSH may report ready but daemon needs ~30s to stabilize
+- Instance status goes: creating → loading → running
+- **Cannot update env vars** on an existing instance — env is set at creation time only
+- **Port exposure**: Dockerfile `EXPOSE 5000` tells Vast.ai to map the port. Instance info contains port mappings in `ports` field and/or `public_ipaddr` for direct access.
 - Filter on `gpu_ram gte`, `dph_total lte`, `rentable eq true`
 - Prefer newer GPU architectures (RTX 3090/4090, A100) over V100 — better CUDA support and faster network
+
+## Vast.ai Port Mapping (needs e2e verification)
+
+The `get_worker_url()` function extracts the worker's HTTP URL from instance info. Two approaches tried in order:
+
+1. **Port mapping dict**: `inst["ports"]["5000/tcp"][0]["HostPort"]` + `inst["public_ipaddr"]`
+2. **Direct port fallback**: `inst["direct_port_start"]` + `inst["public_ipaddr"]`
+
+The exact field format needs verification against a real instance response. During the e2e test, inspect the full instance dict to confirm which fields are populated.
 
 ## GPU Requirements
 
@@ -76,29 +166,13 @@ All configurable with sensible defaults:
 | Min VRAM | `16` GB | `MIN_VRAM_GB` | Minimum for FLUX float16 |
 | Min CUDA | `12.0` | `MIN_CUDA_VERSION` | Older versions lack bfloat16 |
 | Disk | `50` GB | `DISK_GB` | |
-| SSH key | `~/.ssh/id_ed25519` | `SSH_KEY_PATH` | Fall back to `~/.ssh/id_rsa` |
 
 - Avoid V100 — no native bfloat16, slow network on cheap hosts
-
-## Worker Interface
-
-The Docker worker (`docker/worker.py`) reads:
-- `PROMPT` env var (required) — the image prompt
-- `OUTPUT_DIR` env var (optional, default `/output`) — where to save image
-
-Writes:
-- `/output/image.png` — the generated image
-- `/output/done` — sentinel file with content "ok" when complete
-
-## SSH Key
-
-Default: `~/.ssh/id_ed25519` (fall back to `~/.ssh/id_rsa`). Configurable via `ssh_key_path` param or `SSH_KEY_PATH` env var. Must be registered in Vast.ai account settings.
 
 ## .env.example
 
 ```
 VASTAI_API_KEY=
-SSH_KEY_PATH=~/.ssh/id_ed25519
 MAX_GPU_PRICE=0.50
 MIN_VRAM_GB=16
 MIN_CUDA_VERSION=12.0
