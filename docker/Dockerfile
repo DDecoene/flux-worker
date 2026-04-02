@@ -16,4 +16,6 @@ snapshot_download( \
 
 COPY worker.py /worker.py
 
+EXPOSE 5000
+
 CMD ["python3", "/worker.py"]

@@ -4,6 +4,7 @@ from flux_worker.exceptions import VastAIError
 
 VASTAI_API = "https://console.vast.ai/api/v0"
 DOCKER_IMAGE = "ghcr.io/ddecoene/flux-worker:latest"
+WORKER_PORT = 5000
 
 
 def _headers(api_key: str) -> dict:
@@ -29,7 +30,7 @@ def find_offer(api_key: str, max_price: float, min_vram_gb: int, min_cuda: float
         "dph_total": {"lte": max_price},
         "cuda_vers": {"gte": min_cuda},
         "gpu_name": {"notin": ["Tesla V100", "Tesla V100-SXM2-16GB", "Tesla V100-PCIE-16GB"]},
-        "inet_down": {"gte": 300},  # min 300 Mbps download — needed to pull 30GB image in time
+        "inet_down": {"gte": 300},
         "order": [["dph_total", "asc"]],
         "limit": 10,
     }
@@ -49,7 +50,7 @@ def find_offer(api_key: str, max_price: float, min_vram_gb: int, min_cuda: float
 
 
 def create_instance(api_key: str, offer_id: int, disk_gb: int,
-                    callback_url: str, callback_token: str, label: str = "") -> dict:
+                    worker_token: str, label: str = "") -> dict:
     """Rent the offer and start the worker. Returns instance dict."""
     payload = {
         "client_id": "me",
@@ -57,8 +58,7 @@ def create_instance(api_key: str, offer_id: int, disk_gb: int,
         "disk": disk_gb,
         "label": label,
         "env": {
-            "CALLBACK_URL": callback_url,
-            "CALLBACK_TOKEN": callback_token,
+            "WORKER_TOKEN": worker_token,
         },
     }
     resp = requests.put(
@@ -78,6 +78,31 @@ def get_instance(api_key: str, instance_id: int) -> dict | None:
     for inst in instances:
         if inst["id"] == instance_id:
             return inst
+    return None
+
+
+def get_worker_url(inst: dict) -> str | None:
+    """Extract HTTP URL to reach the worker from instance info.
+
+    Vast.ai exposes ports via the public IP + Docker port mapping.
+    The instance 'ports' field maps container ports to host ports.
+    """
+    public_ip = inst.get("public_ipaddr")
+    if not public_ip:
+        return None
+
+    ports = inst.get("ports", {})
+    key = f"{WORKER_PORT}/tcp"
+    if key in ports and ports[key]:
+        host_port = ports[key][0].get("HostPort")
+        if host_port:
+            return f"http://{public_ip}:{host_port}"
+
+    # Fallback: some Vast.ai setups use direct port access
+    direct_port_start = inst.get("direct_port_start")
+    if direct_port_start:
+        return f"http://{public_ip}:{direct_port_start}"
+
     return None
 
 
@@ -106,16 +131,6 @@ def find_resumable_instance(api_key: str) -> dict | None:
         ):
             return inst
     return None
-
-
-def update_instance_env(api_key: str, instance_id: int, env: dict) -> None:
-    """Update env vars on a running instance (used to patch CALLBACK_URL on resume)."""
-    resp = requests.put(
-        f"{VASTAI_API}/instances/{instance_id}/",
-        headers=_headers(api_key),
-        json={"env": env},
-    )
-    _raise_for_status(resp)
 
 
 def destroy_instance(api_key: str, instance_id: int) -> None:

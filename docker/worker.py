@@ -1,42 +1,15 @@
 import base64
+import json
 import os
-import time
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-import requests
 
-CALLBACK_URL = os.environ["CALLBACK_URL"]
-CALLBACK_TOKEN = os.environ["CALLBACK_TOKEN"]
+WORKER_TOKEN = os.environ.get("WORKER_TOKEN", "")
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "/output"))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+PORT = int(os.environ.get("WORKER_PORT", "5000"))
 
-READY_RETRIES = 5
-READY_INTERVAL = 300  # 5 minutes
-
-
-def callback(path: str, data: dict) -> dict:
-    resp = requests.post(f"{CALLBACK_URL}{path}", json=data, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
-
-
-def call_ready() -> dict:
-    """Call /ready with retries. Returns response dict."""
-    for attempt in range(1, READY_RETRIES + 1):
-        try:
-            print(f"Calling /ready (attempt {attempt}/{READY_RETRIES})...")
-            return callback("/ready", {"token": CALLBACK_TOKEN})
-        except Exception as e:
-            print(f"  /ready failed: {e}")
-            if attempt < READY_RETRIES:
-                print(f"  Retrying in {READY_INTERVAL}s...")
-                time.sleep(READY_INTERVAL)
-    raise RuntimeError(f"/ready failed after {READY_RETRIES} attempts")
-
-
-# Signal readiness and get first prompt
-response = call_ready()
-
-# Load model once
+# Load model at startup — server won't accept requests until this completes
 print("Loading model...")
 import torch
 from diffusers import FluxPipeline
@@ -45,34 +18,57 @@ pipe = FluxPipeline.from_pretrained("/model", torch_dtype=torch.bfloat16)
 pipe = pipe.to("cuda")
 print("Model loaded.")
 
-while True:
-    prompt = response.get("prompt")
-    index = response.get("index", 0)
 
-    if not prompt:
-        print("No prompt in response, exiting.")
-        break
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        print(format % args)
 
-    print(f"Generating image {index}: {prompt[:60]}")
-    try:
-        image = pipe(prompt, num_inference_steps=4, guidance_scale=0.0).images[0]
-        img_path = OUTPUT_DIR / f"image_{index}.png"
-        image.save(img_path)
+    def _check_token(self):
+        token = self.headers.get("Authorization", "").replace("Bearer ", "")
+        if WORKER_TOKEN and token != WORKER_TOKEN:
+            self._respond(403, {"error": "invalid token"})
+            return False
+        return True
 
-        with open(img_path, "rb") as f:
-            image_b64 = base64.b64encode(f.read()).decode()
+    def do_GET(self):
+        if self.path == "/health":
+            if not self._check_token():
+                return
+            self._respond(200, {"status": "ready"})
+        else:
+            self._respond(404, {"error": "not found"})
 
-        print(f"Sending /done for index {index}...")
-        response = callback("/done", {
-            "token": CALLBACK_TOKEN,
-            "index": index,
-            "image_b64": image_b64,
-        })
+    def do_POST(self):
+        if self.path == "/generate":
+            if not self._check_token():
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length))
+            prompt = body["prompt"]
+            index = body.get("index", 0)
 
-        if response.get("done"):
-            print("All done. Exiting.")
-            break
+            print(f"Generating image {index}: {prompt[:60]}")
+            image = pipe(prompt, num_inference_steps=4, guidance_scale=0.0).images[0]
+            img_path = OUTPUT_DIR / f"image_{index}.png"
+            image.save(img_path)
 
-    except Exception as e:
-        print(f"Error generating image {index}: {e}")
-        break
+            with open(img_path, "rb") as f:
+                image_b64 = base64.b64encode(f.read()).decode()
+
+            print(f"Done generating image {index}")
+            self._respond(200, {"image_b64": image_b64, "index": index})
+        else:
+            self._respond(404, {"error": "not found"})
+
+    def _respond(self, status, data):
+        body = json.dumps(data).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", len(body))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+print(f"Starting worker on port {PORT}...")
+server = HTTPServer(("0.0.0.0", PORT), Handler)
+server.serve_forever()
