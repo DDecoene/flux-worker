@@ -2,7 +2,7 @@
 
 ## What This Project Is
 
-A Python package for local image generation using `diffusers` and PyTorch. Defaults to Stable Diffusion 2.1. Zero cost, runs entirely on your GPU.
+A Python package for local image generation using `diffusers` and PyTorch. Defaults to Stable Diffusion v1.5 (public, no auth required). Zero cost, runs entirely on your GPU.
 
 - **Python client** (`flux_worker/`) — local inference with diffusers, saves images locally, installable via pip
 - No cloud API calls, no tokens required (optional for gated models)
@@ -12,7 +12,7 @@ A Python package for local image generation using `diffusers` and PyTorch. Defau
 
 - Simple, agent-friendly API: `generate(prompts) -> GenerateResult`
 - Zero cloud dependency or costs
-- Fast inference on local hardware (~3-5s per image on M2)
+- Fast inference on local hardware (~5-10s per image on M2)
 - CLI users install via Homebrew (`brew tap ddecoene/tap && brew install flux-worker`)
 - Python/agent users install via pip or pipx
 - Also used internally by `social-agent` project
@@ -42,12 +42,12 @@ flux_worker/
 
 ```
 1. generate(prompts) called
-2. load_config() reads HF_MODEL from env (default: stabilityai/stable-diffusion-2-1)
+2. load_config() reads HF_MODEL from env (default: runwayml/stable-diffusion-v1-5)
 3. First call only:
-   - Download model from HuggingFace Hub (~2.5GB, cached locally)
+   - Download model from HuggingFace Hub (~4GB, cached locally)
    - Load into GPU memory (float16 quantization for efficiency)
 4. For each prompt:
-   - Run inference: pipeline(prompt, num_inference_steps=20)
+   - Run inference: pipeline(prompt, num_inference_steps=15)
    - Receives PIL.Image object
    - Save PNG to output_dir/image_{i}.png
 5. Return GenerateResult(ok=True, images=[...])
@@ -56,11 +56,11 @@ flux_worker/
 ## Model Support
 
 Tested & working:
-- `stabilityai/stable-diffusion-2-1` (3.5GB, fast, ~3-5s, default)
-- `stabilityai/stable-diffusion-xl-base-1.0` (6GB, better quality, ~8-10s)
+- `runwayml/stable-diffusion-v1-5` (4GB, fast, ~5-10s, default, public, no auth required)
+- `stabilityai/stable-diffusion-xl-base-1.0` (6GB, better quality, ~10-20s, requires HF_TOKEN for gated access)
 
 With quantization (8GB M2):
-- `black-forest-labs/FLUX.1-schnell` (requires int8 quantization)
+- `black-forest-labs/FLUX.1-schnell` (requires HF_TOKEN and int8 quantization)
 
 ## Key Design Decisions
 
@@ -74,10 +74,10 @@ With quantization (8GB M2):
 ## .env.example
 
 ```
-# Optional: which model to use
-# HF_MODEL=stabilityai/stable-diffusion-2-1
+# Optional: which model to use (default is public, no auth needed)
+# HF_MODEL=runwayml/stable-diffusion-v1-5
 
-# Optional: HF token for gated models
+# Optional: HF token for gated models (SDXL, FLUX, etc)
 # HF_TOKEN=hf_...
 ```
 
@@ -85,8 +85,8 @@ With quantization (8GB M2):
 
 | Env var | Required | Default | Description |
 |---|---|---|---|
-| `HF_MODEL` | No | `stabilityai/stable-diffusion-2-1` | Model ID from huggingface.co |
-| `HF_TOKEN` | No | — | HuggingFace token (only needed for gated models) |
+| `HF_MODEL` | No | `runwayml/stable-diffusion-v1-5` | Model ID from huggingface.co (public, no auth required) |
+| `HF_TOKEN` | No | — | HuggingFace token (only needed for gated models like SDXL, FLUX) |
 
 ## Installation for Development
 
@@ -98,10 +98,14 @@ uv sync
 
 ## Testing
 
-Run against the real HuggingFace API:
+No unit tests. Test by running the CLI against local inference:
 
 ```bash
-export HF_TOKEN=hf_...
+# Default model (no token needed)
 flux-worker generate "a red panda on a surfboard"
-# Expect: output/image_0.png written in ~10-30s
+# Expect: output/image_0.png written in ~5-10s on M2 (after first-run model download)
+
+# Gated model (requires token)
+export HF_TOKEN=hf_...
+flux-worker generate "a red panda" --model stabilityai/stable-diffusion-xl-base-1.0
 ```

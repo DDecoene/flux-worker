@@ -1,18 +1,19 @@
 # flux-worker
 
-Generate images locally on your machine. Uses [diffusers](https://github.com/huggingface/diffusers) library with [Stable Diffusion 2.1](https://huggingface.co/stabilityai/stable-diffusion-2-1) by default.
+Generate images locally on your machine. Uses [diffusers](https://github.com/huggingface/diffusers) library with [Stable Diffusion v1.5](https://huggingface.co/runwayml/stable-diffusion-v1-5) by default.
 
 - **Simple interface** — prompt in, image file out
 - **Local inference** — runs entirely on your GPU, no API calls
-- **Free** — no tokens, no cloud bills
-- **Fast** — ~3-5 seconds per image on Apple Silicon or modern GPU
+- **Free** — no tokens required (HF_TOKEN optional for gated models)
+- **Fast** — ~5-10 seconds per image on Apple Silicon
 - **Batch generation** — pass multiple prompts, images saved locally
+
+> **Platform support**: Currently optimized for **macOS Apple Silicon** (MPS). Linux/NVIDIA CUDA support is not yet implemented.
 
 ## Requirements
 
 - **macOS (Apple Silicon)**: M1/M2/M3 or newer, 8GB+ RAM
-- **Linux/Windows**: NVIDIA GPU with 8GB+ VRAM (CUDA 11.8+)
-- **Storage**: ~2-4GB for model weights (one-time download)
+- **Storage**: ~2.5GB for model weights (one-time download, cached by HuggingFace)
 
 ## Installation
 
@@ -35,35 +36,50 @@ pip install flux-worker
 
 ### First run
 
-First time you generate an image, the model (~2.5GB) will download automatically from HuggingFace.
+First time you generate an image, the model (~2.5GB) will download automatically from HuggingFace and be cached locally.
 
 ```bash
 flux-worker generate "a cyclist at golden hour"
-# First run: downloading model (1-2 min)
+# First run: downloading model (~1-2 min, one-time)
 # Generating image 1/1: a cyclist at golden hour...
 # Saved: ./output/image_0.png
 ```
 
-On subsequent runs, the model is cached — no download needed.
+Subsequent calls are fast — model is cached in `~/.cache/huggingface/`.
 
-### Claude Code agent tool
+### Using in your Python project
 
-Add to your `CLAUDE.md`:
-
+```bash
+pip install flux-worker
 ```
-You have access to flux-worker for generating images.
-Use the bash tool to run: flux-worker generate "<prompt>"
-Images are saved to ./output/ by default.
-```
-
-Or call directly from Python:
 
 ```python
 from flux_worker import generate
 
 result = generate("a cyclist at golden hour")
-print(result.images[0])  # Path to PNG
+if result.ok:
+    print(result.images[0])  # Path to saved PNG
+else:
+    print(result.error_message)
 ```
+
+### Using with Claude Code or other AI coding agents
+
+Add to your project's `CLAUDE.md`:
+
+```markdown
+## Image generation
+
+This project uses flux-worker for local image generation.
+
+- CLI: `flux-worker generate "<prompt>"` — images saved to `./output/`
+- Python: `from flux_worker import generate; result = generate("<prompt>")`
+- Result object: `result.ok` (bool), `result.images` (list of Path), `result.error_message` (str)
+- No API keys needed for the default model
+- First run downloads ~2.5GB model, subsequent runs are instant
+```
+
+The agent can then call the CLI via Bash or import the Python API directly.
 
 ## Usage
 
@@ -127,14 +143,14 @@ Optional. Place in a `.env` file or export in your shell:
 
 | Variable | Description | Default |
 |---|---|---|
-| `HF_MODEL` | Model ID from huggingface.co | `stabilityai/stable-diffusion-2-1` |
+| `HF_MODEL` | Model ID from huggingface.co | `runwayml/stable-diffusion-v1-5` |
 | `HF_TOKEN` | HuggingFace token (for gated models) | — |
 
 ### Recommended models
 
-- **Fast (~3-5s)**: `stabilityai/stable-diffusion-2-1` (default, 3.5GB)
-- **Better quality (~8-10s)**: `stabilityai/stable-diffusion-xl-base-1.0` (6GB, requires more VRAM)
-- **Experimental**: `black-forest-labs/FLUX.1-schnell` (requires quantization on M2)
+- **Fast (~5-10s)**: `runwayml/stable-diffusion-v1-5` (default, 4GB) — public, requires no authentication
+- **Better quality (~10-20s)**: `stabilityai/stable-diffusion-xl-base-1.0` (6GB, requires HF_TOKEN for gated access)
+- **Experimental**: `black-forest-labs/FLUX.1-schnell` (requires quantization on M2 and HF_TOKEN)
 
 ## License
 

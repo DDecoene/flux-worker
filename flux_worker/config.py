@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_MODEL = "stabilityai/stable-diffusion-2-1"
+DEFAULT_MODEL = "runwayml/stable-diffusion-v1-5"
 
 
 @dataclass

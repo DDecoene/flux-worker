@@ -49,6 +49,7 @@ def _get_pipeline(model_id: str, hf_token: str | None = None):
                 token=hf_token,
             )
             _PIPELINE.to("mps")  # Apple Metal Performance Shaders
+            _PIPELINE.enable_attention_slicing()  # reduces MPS memory pressure
         except Exception as e:
             raise FluxError(f"Failed to load model {model_id}: {e}")
     return _PIPELINE
@@ -57,7 +58,7 @@ def _get_pipeline(model_id: str, hf_token: str | None = None):
 def _generate_image(config, prompt: str, index: int):
     try:
         pipeline = _get_pipeline(config.model, hf_token=config.hf_token)
-        image = pipeline(prompt, num_inference_steps=20).images[0]
+        image = pipeline(prompt, num_inference_steps=15).images[0]
         path = config.output_dir / f"image_{index}.png"
         image.save(str(path))
         return path
