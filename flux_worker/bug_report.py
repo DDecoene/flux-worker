@@ -7,7 +7,7 @@ GITHUB_REPO = "ddecoene/flux-worker"
 ISSUES_URL = f"https://github.com/{GITHUB_REPO}/issues"
 
 
-def _build_body(error_message: str, tb: str | None, config=None) -> str:
+def _build_body(error_message: str, tb: str | None) -> str:
     try:
         pkg_version = version("flux-worker")
     except Exception:
@@ -20,21 +20,8 @@ def _build_body(error_message: str, tb: str | None, config=None) -> str:
         f"**Python:** {platform.python_version()}",
         f"**OS:** {platform.system()} {platform.release()}",
         "",
-    ]
-
-    if config:
-        lines += [
-            "**Config:**",
-            f"- max_gpu_price: {config.max_gpu_price}",
-            f"- min_vram_gb: {config.min_vram_gb}",
-            f"- min_cuda_version: {config.min_cuda_version}",
-            f"- disk_gb: {config.disk_gb}",
-            "",
-        ]
-
-    lines += [
         "**Error:**",
-        f"```",
+        "```",
         error_message,
         "```",
         "",
@@ -51,9 +38,9 @@ def _build_body(error_message: str, tb: str | None, config=None) -> str:
     return "\n".join(lines)
 
 
-def fallback_url(error_message: str, tb: str | None, config=None) -> str:
+def fallback_url(error_message: str, tb: str | None) -> str:
     """Return a pre-filled GitHub new-issue URL."""
-    body = _build_body(error_message, tb, config)
+    body = _build_body(error_message, tb)
     params = urllib.parse.urlencode({
         "title": f"Unexpected error: {error_message[:80]}",
         "body": body,
@@ -62,14 +49,14 @@ def fallback_url(error_message: str, tb: str | None, config=None) -> str:
     return f"{ISSUES_URL}/new?{params}"
 
 
-def create_github_issue(error_message: str, tb: str | None, config=None) -> str | None:
+def create_github_issue(error_message: str, tb: str | None) -> str | None:
     """Create a GitHub issue via API. Returns issue URL or None on failure."""
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
         return None
 
     import requests as req
-    body = _build_body(error_message, tb, config)
+    body = _build_body(error_message, tb)
     try:
         resp = req.post(
             f"https://api.github.com/repos/{GITHUB_REPO}/issues",
@@ -91,11 +78,11 @@ def create_github_issue(error_message: str, tb: str | None, config=None) -> str 
     return None
 
 
-def file_report(error_message: str, tb: str | None, config=None) -> dict:
+def file_report(error_message: str, tb: str | None) -> dict:
     """File a bug report. Returns dict with 'issue_url' and/or 'fallback_url'."""
     result = {}
-    issue_url = create_github_issue(error_message, tb, config)
+    issue_url = create_github_issue(error_message, tb)
     if issue_url:
         result["issue_url"] = issue_url
-    result["fallback_url"] = fallback_url(error_message, tb, config)
+    result["fallback_url"] = fallback_url(error_message, tb)
     return result

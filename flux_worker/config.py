@@ -6,37 +6,25 @@ from flux_worker.exceptions import UserError
 
 load_dotenv()
 
+HF_DEFAULT_MODEL = "stabilityai/stable-diffusion-xl-base-1.0"
+
 
 @dataclass
 class Config:
-    vastai_api_key: str
-    max_gpu_price: float
-    min_vram_gb: int
-    min_cuda_version: float
-    disk_gb: int
+    hf_token: str
+    hf_model: str
     output_dir: Path
 
 
-def load_config(
-    vastai_api_key=None,
-    max_gpu_price=None,
-    min_vram_gb=None,
-    min_cuda_version=None,
-    disk_gb=None,
-    output_dir="./output",
-) -> Config:
-    api_key = vastai_api_key or os.environ.get("VASTAI_API_KEY")
-    if not api_key:
+def load_config(hf_token=None, model=None, output_dir="./output") -> Config:
+    token = hf_token or os.environ.get("HF_TOKEN")
+    if not token:
         raise UserError(
-            "Missing VASTAI_API_KEY.\n"
-            "  Set it in .env or pass --vastai-key."
+            "Missing HF_TOKEN.\n"
+            "  Set it in .env or pass --hf-token."
         )
-
     return Config(
-        vastai_api_key=api_key,
-        max_gpu_price=float(max_gpu_price or os.environ.get("MAX_GPU_PRICE", 0.50)),
-        min_vram_gb=int(min_vram_gb or os.environ.get("MIN_VRAM_GB", 16)),
-        min_cuda_version=float(min_cuda_version or os.environ.get("MIN_CUDA_VERSION", 12.0)),
-        disk_gb=int(disk_gb or os.environ.get("DISK_GB", 50)),
+        hf_token=token,
+        hf_model=model or os.environ.get("HF_MODEL", HF_DEFAULT_MODEL),
         output_dir=Path(output_dir),
     )
