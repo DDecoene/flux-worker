@@ -2,9 +2,9 @@ import traceback
 from diffusers import StableDiffusionPipeline
 import torch
 
-from flux_worker.config import load_config
-from flux_worker.exceptions import UserError, FluxError
-from flux_worker.result import GenerateResult
+from imgforge.config import load_config
+from imgforge.exceptions import UserError, ImgForgeError
+from imgforge.result import GenerateResult
 
 _PIPELINE = None
 
@@ -51,7 +51,7 @@ def _get_pipeline(model_id: str, hf_token: str | None = None):
             _PIPELINE.to("mps")  # Apple Metal Performance Shaders
             _PIPELINE.enable_attention_slicing()  # reduces MPS memory pressure
         except Exception as e:
-            raise FluxError(f"Failed to load model {model_id}: {e}")
+            raise ImgForgeError(f"Failed to load model {model_id}: {e}")
     return _PIPELINE
 
 
@@ -62,7 +62,7 @@ def _generate_image(config, prompt: str, index: int):
         path = config.output_dir / f"image_{index}.png"
         image.save(str(path))
         return path
-    except FluxError:
+    except ImgForgeError:
         raise
     except Exception as e:
-        raise FluxError(f"Image generation failed: {e}")
+        raise ImgForgeError(f"Image generation failed: {e}")

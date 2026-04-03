@@ -1,121 +1,48 @@
-# flux-worker
+# imgforge
 
-Generate images locally on your machine. Uses [diffusers](https://github.com/huggingface/diffusers) library with [Stable Diffusion v1.5](https://huggingface.co/runwayml/stable-diffusion-v1-5) by default.
+Local image generation for Python. Uses [diffusers](https://github.com/huggingface/diffusers) with [Stable Diffusion v1.5](https://huggingface.co/runwayml/stable-diffusion-v1-5) by default.
 
-- **Simple interface** — prompt in, image file out
-- **Local inference** — runs entirely on your GPU, no API calls
-- **Free** — no tokens required (HF_TOKEN optional for gated models)
+- **Simple API** — `generate(prompts)` returns image paths
+- **Local inference** — runs on your GPU, no API calls, no cloud
+- **Free** — no tokens required for the default model
 - **Fast** — ~5-10 seconds per image on Apple Silicon
-- **Batch generation** — pass multiple prompts, images saved locally
 
-> **Platform support**: Currently optimized for **macOS Apple Silicon** (MPS). Linux/NVIDIA CUDA support is not yet implemented.
+> **Platform**: macOS Apple Silicon (MPS) only. CUDA/Linux not yet supported.
 
 ## Requirements
 
-- **macOS (Apple Silicon)**: M1/M2/M3 or newer, 8GB+ RAM
-- **Storage**: ~2.5GB for model weights (one-time download, cached by HuggingFace)
+- macOS with M1/M2/M3 or newer, 8GB+ RAM
+- ~2.5GB storage for model weights (downloaded once, cached by HuggingFace)
 
 ## Installation
 
-### CLI tool — Homebrew (macOS)
-
-```bash
-brew tap ddecoene/tap
-brew install flux-worker
-```
-
-### Python library — from GitHub
-
-Not yet published to PyPI. Install directly from GitHub:
+Not yet on PyPI. Install directly from GitHub:
 
 ```bash
 # uv (recommended)
-uv add "flux-worker @ git+https://github.com/DDecoene/flux-worker.git"
+uv add "imgforge @ git+https://github.com/DDecoene/flux-worker.git"
 
 # pip
-pip install "flux-worker @ git+https://github.com/DDecoene/flux-worker.git"
-
-# pipx (installs CLI into isolated env)
-pipx install "flux-worker @ git+https://github.com/DDecoene/flux-worker.git"
+pip install "imgforge @ git+https://github.com/DDecoene/flux-worker.git"
 ```
 
-### First run
-
-First time you generate an image, the model (~2.5GB) will download automatically from HuggingFace and be cached locally.
+Pin to a stable tag:
 
 ```bash
-flux-worker generate "a cyclist at golden hour"
-# First run: downloading model (~1-2 min, one-time)
-# Generating image 1/1: a cyclist at golden hour...
-# Saved: ./output/image_0.png
+uv add "imgforge @ git+https://github.com/DDecoene/flux-worker.git@v0.2.0"
 ```
-
-Subsequent calls are fast — model is cached in `~/.cache/huggingface/`.
-
-### Using in your Python project
-
-```bash
-uv add "flux-worker @ git+https://github.com/DDecoene/flux-worker.git"
-```
-
-```python
-from flux_worker import generate
-
-result = generate("a cyclist at golden hour")
-if result.ok:
-    print(result.images[0])  # Path to saved PNG
-else:
-    print(result.error_message)
-```
-
-### Using with Claude Code or other AI coding agents
-
-Add to your project's `CLAUDE.md`:
-
-```markdown
-## Image generation
-
-This project uses flux-worker for local image generation.
-
-- CLI: `flux-worker generate "<prompt>"` — images saved to `./output/`
-- Python: `from flux_worker import generate; result = generate("<prompt>")`
-- Result object: `result.ok` (bool), `result.images` (list of Path), `result.error_message` (str)
-- No API keys needed for the default model
-- First run downloads ~2.5GB model, subsequent runs are instant
-```
-
-The agent can then call the CLI via Bash or import the Python API directly.
 
 ## Usage
 
-### CLI
-
-```bash
-# Single prompt
-flux-worker generate "a cyclist at golden hour in the Flemish polders"
-
-# Multiple prompts
-flux-worker generate "a cyclist" "a runner" "a swimmer"
-
-# From JSON file
-flux-worker generate --prompts-file prompts.json
-
-# Custom output directory
-flux-worker generate "a cyclist" --output ./my-images/
-
-# Use a different model
-flux-worker generate "a cyclist" --model stabilityai/stable-diffusion-xl-base-1.0
-```
-
-### Python API
-
 ```python
-from flux_worker import generate
+from imgforge import generate
 
 # Single image
 result = generate("a cyclist at golden hour in the Flemish polders")
 if result.ok:
     print(result.images[0])  # Path to saved PNG
+else:
+    print(result.error_message)
 
 # Batch
 result = generate([
@@ -124,38 +51,62 @@ result = generate([
     "a swimmer at sunrise, aerial view",
 ])
 
-# With custom settings
+# Custom output directory or model
 result = generate(
     prompts=["a cyclist"],
-    output_dir="./images",
+    output_dir="./my-images",
     model="stabilityai/stable-diffusion-xl-base-1.0",
 )
 
-# Check results
-print(f"Success: {result.ok}")
-print(f"Images: {result.images}")
+print(result.ok)      # True on success
+print(result.images)  # [PosixPath('./my-images/image_0.png')]
 ```
 
-### prompts.json format
+## Result object
 
-```json
-["prompt one", "prompt two", "prompt three"]
-```
-
-## Environment Variables
-
-Optional. Place in a `.env` file or export in your shell:
-
-| Variable | Description | Default |
+| Field | Type | Description |
 |---|---|---|
-| `HF_MODEL` | Model ID from huggingface.co | `runwayml/stable-diffusion-v1-5` |
-| `HF_TOKEN` | HuggingFace token (for gated models) | — |
+| `ok` | `bool` | `True` on success |
+| `images` | `list[Path]` | Paths to generated PNGs |
+| `error_type` | `str \| None` | `"user_error"` or `"unexpected"` |
+| `error_message` | `str \| None` | Human-readable error |
+| `traceback` | `str \| None` | Full traceback on unexpected errors |
 
-### Recommended models
+## Environment variables
 
-- **Fast (~5-10s)**: `runwayml/stable-diffusion-v1-5` (default, ~2.5GB) — public, requires no authentication
-- **Better quality (~10-20s)**: `stabilityai/stable-diffusion-xl-base-1.0` (6GB, requires HF_TOKEN for gated access)
-- **Experimental**: `black-forest-labs/FLUX.1-schnell` (requires quantization on M2 and HF_TOKEN)
+| Variable | Default | Description |
+|---|---|---|
+| `HF_MODEL` | `runwayml/stable-diffusion-v1-5` | Model ID from huggingface.co |
+| `HF_TOKEN` | — | HuggingFace token (only for gated models) |
+
+## Models
+
+- **Default (~5-10s, ~2.5GB)**: `runwayml/stable-diffusion-v1-5` — public, no auth required
+- **Better quality (~10-20s, ~6GB)**: `stabilityai/stable-diffusion-xl-base-1.0` — requires `HF_TOKEN`
+- **Experimental**: `black-forest-labs/FLUX.1-schnell` — requires `HF_TOKEN` and quantization
+
+## Using with Claude Code or other AI agents
+
+Add to your project's `CLAUDE.md`:
+
+```markdown
+## Image generation
+
+This project uses imgforge for local image generation (Apple Silicon only).
+
+Install: `uv add "imgforge @ git+https://github.com/DDecoene/flux-worker.git"`
+
+```python
+from imgforge import generate
+
+result = generate("your prompt here", output_dir="./output")
+# result.ok (bool), result.images (list of Path), result.error_message (str)
+```
+
+- No API keys needed for the default model
+- First run downloads ~2.5GB model — subsequent calls are instant (cached)
+- Images saved as PNG to output_dir/image_{i}.png
+```
 
 ## License
 

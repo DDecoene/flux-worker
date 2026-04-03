@@ -3,20 +3,20 @@ import platform
 import urllib.parse
 from importlib.metadata import version
 
-GITHUB_REPO = "ddecoene/flux-worker"
+GITHUB_REPO = "DDecoene/flux-worker"
 ISSUES_URL = f"https://github.com/{GITHUB_REPO}/issues"
 
 
 def _build_body(error_message: str, tb: str | None) -> str:
     try:
-        pkg_version = version("flux-worker")
+        pkg_version = version("imgforge")
     except Exception:
         pkg_version = "unknown"
 
     lines = [
         "## Bug Report",
         "",
-        f"**flux-worker version:** {pkg_version}",
+        f"**imgforge version:** {pkg_version}",
         f"**Python:** {platform.python_version()}",
         f"**OS:** {platform.system()} {platform.release()}",
         "",
@@ -39,7 +39,6 @@ def _build_body(error_message: str, tb: str | None) -> str:
 
 
 def fallback_url(error_message: str, tb: str | None) -> str:
-    """Return a pre-filled GitHub new-issue URL."""
     body = _build_body(error_message, tb)
     params = urllib.parse.urlencode({
         "title": f"Unexpected error: {error_message[:80]}",
@@ -50,7 +49,6 @@ def fallback_url(error_message: str, tb: str | None) -> str:
 
 
 def create_github_issue(error_message: str, tb: str | None) -> str | None:
-    """Create a GitHub issue via API. Returns issue URL or None on failure."""
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
         return None
@@ -79,7 +77,6 @@ def create_github_issue(error_message: str, tb: str | None) -> str | None:
 
 
 def file_report(error_message: str, tb: str | None) -> dict:
-    """File a bug report. Returns dict with 'issue_url' and/or 'fallback_url'."""
     result = {}
     issue_url = create_github_issue(error_message, tb)
     if issue_url:
