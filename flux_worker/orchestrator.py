@@ -1,15 +1,12 @@
-import time
 import traceback
-
-import requests
+from diffusers import StableDiffusionPipeline
+import torch
 
 from flux_worker.config import load_config
 from flux_worker.exceptions import UserError, FluxError
 from flux_worker.result import GenerateResult
 
-HF_API_BASE = "https://api-inference.huggingface.co/models"
-GENERATE_TIMEOUT = 120   # seconds per image
-MODEL_LOAD_MAX_WAIT = 300  # max seconds to wait for model to load on HF side
+_PIPELINE = None
 
 
 def generate(
@@ -41,32 +38,30 @@ def generate(
         return GenerateResult(ok=False, error_type="unexpected", error_message=str(e), traceback=tb)
 
 
+def _get_pipeline(model_id: str, hf_token: str | None = None):
+    global _PIPELINE
+    if _PIPELINE is None:
+        try:
+            _PIPELINE = StableDiffusionPipeline.from_pretrained(
+                model_id,
+                torch_dtype=torch.float16,
+                safety_checker=None,
+                token=hf_token,
+            )
+            _PIPELINE.to("mps")  # Apple Metal Performance Shaders
+        except Exception as e:
+            raise FluxError(f"Failed to load model {model_id}: {e}")
+    return _PIPELINE
+
+
 def _generate_image(config, prompt: str, index: int):
-    url = f"{HF_API_BASE}/{config.hf_model}"
-    headers = {"Authorization": f"Bearer {config.hf_token}"}
-    deadline = time.time() + MODEL_LOAD_MAX_WAIT
-
-    while True:
-        resp = requests.post(url, headers=headers, json={"inputs": prompt}, timeout=GENERATE_TIMEOUT)
-
-        if resp.status_code == 200:
-            path = config.output_dir / f"image_{index}.png"
-            path.write_bytes(resp.content)
-            return path
-
-        if resp.status_code == 401:
-            raise UserError("HuggingFace token is invalid. Check your HF_TOKEN.")
-
-        if resp.status_code == 503:
-            if time.time() >= deadline:
-                raise FluxError(f"Model did not load within {MODEL_LOAD_MAX_WAIT}s.")
-            try:
-                wait = resp.json().get("estimated_time", 20)
-            except Exception:
-                wait = 20
-            sleep_time = max(0.1, min(wait, deadline - time.time()))
-            print(f"  Model loading, waiting {sleep_time:.0f}s...")
-            time.sleep(sleep_time)
-            continue
-
-        resp.raise_for_status()
+    try:
+        pipeline = _get_pipeline(config.model, hf_token=config.hf_token)
+        image = pipeline(prompt, num_inference_steps=20).images[0]
+        path = config.output_dir / f"image_{index}.png"
+        image.save(str(path))
+        return path
+    except FluxError:
+        raise
+    except Exception as e:
+        raise FluxError(f"Image generation failed: {e}")

@@ -12,8 +12,8 @@ def cli():
 @click.argument("prompts", nargs=-1)
 @click.option("--prompts-file", type=click.Path(exists=True), help="JSON file with list of prompts")
 @click.option("--output", default="./output", show_default=True, help="Output directory")
-@click.option("--hf-token", envvar="HF_TOKEN", help="HuggingFace API token")
-@click.option("--model", envvar="HF_MODEL", help="HuggingFace model ID (default: stabilityai/stable-diffusion-xl-base-1.0)")
+@click.option("--hf-token", envvar="HF_TOKEN", help="HuggingFace token (optional, for gated models)")
+@click.option("--model", envvar="HF_MODEL", help="Model ID (default: stabilityai/stable-diffusion-2-1)")
 def generate_cmd(prompts, prompts_file, output, hf_token, model):
     """Generate images from one or more prompts."""
     if prompts_file:

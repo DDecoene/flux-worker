@@ -2,25 +2,28 @@
 
 ## What This Project Is
 
-A Python package for generating images via the HuggingFace Inference API. Defaults to Stable Diffusion XL (`stabilityai/stable-diffusion-xl-base-1.0`).
+A Python package for local image generation using `diffusers` and PyTorch. Defaults to Stable Diffusion 2.1. Zero cost, runs entirely on your GPU.
 
-- **Python client** (`flux_worker/`) — calls HF Inference API, saves images locally, installable via pip
-- No Docker, no GPU management, no cloud instance lifecycle
+- **Python client** (`flux_worker/`) — local inference with diffusers, saves images locally, installable via pip
+- No cloud API calls, no tokens required (optional for gated models)
+- Supports macOS (Apple Silicon) and Linux/Windows (NVIDIA GPU)
 
 ## Project Goals
 
 - Simple, agent-friendly API: `generate(prompts) -> GenerateResult`
+- Zero cloud dependency or costs
+- Fast inference on local hardware (~3-5s per image on M2)
 - CLI users install via Homebrew (`brew tap ddecoene/tap && brew install flux-worker`)
-- Python/agent users install via pip or pipx (`pip install flux-worker`)
+- Python/agent users install via pip or pipx
 - Also used internally by `social-agent` project
 
 ## Tech Stack
 
 - Python 3.10+, UV (never pip for dev)
-- HuggingFace Inference API (HTTP)
-- python-dotenv for .env support
+- `diffusers` library for model inference
+- `torch` for GPU computation (runs on MPS for Apple Silicon, CUDA for NVIDIA)
 - Click for CLI
-- requests for HTTP
+- python-dotenv for .env support
 
 ## Architecture
 
@@ -28,7 +31,7 @@ A Python package for generating images via the HuggingFace Inference API. Defaul
 flux_worker/
 ├── __init__.py       # public API: generate()
 ├── cli.py            # Click CLI entry point
-├── orchestrator.py   # calls HF Inference API, saves images
+├── orchestrator.py   # loads diffusers pipeline, runs inference, saves images
 ├── config.py         # Config dataclass + env loading
 ├── result.py         # GenerateResult dataclass
 ├── exceptions.py     # UserError, FluxError
@@ -39,45 +42,51 @@ flux_worker/
 
 ```
 1. generate(prompts) called
-2. load_config() reads HF_TOKEN from .env / env vars
-3. For each prompt:
-   - POST https://api-inference.huggingface.co/models/{model}
-     body: {"inputs": "<prompt>"}
-     auth: Authorization: Bearer <HF_TOKEN>
-   - On 503 (model loading): wait estimated_time seconds, retry (up to 5 min)
-   - On 200: write raw PNG bytes to output_dir/image_{i}.png
-4. Return GenerateResult(ok=True, images=[...])
+2. load_config() reads HF_MODEL from env (default: stabilityai/stable-diffusion-2-1)
+3. First call only:
+   - Download model from HuggingFace Hub (~2.5GB, cached locally)
+   - Load into GPU memory (float16 quantization for efficiency)
+4. For each prompt:
+   - Run inference: pipeline(prompt, num_inference_steps=20)
+   - Receives PIL.Image object
+   - Save PNG to output_dir/image_{i}.png
+5. Return GenerateResult(ok=True, images=[...])
 ```
 
-## HuggingFace Inference API Notes
+## Model Support
 
-- Base URL: `https://api-inference.huggingface.co/models`
-- Auth: `Authorization: Bearer <HF_TOKEN>`
-- Request: `POST /{model_id}` with body `{"inputs": "prompt text"}`
-- Response on success: raw PNG bytes (Content-Type: image/png)
-- Response on model loading: HTTP 503, body `{"error": "...", "estimated_time": N}`
-- Response on bad token: HTTP 401
-- Free tier is rate-limited; paid inference API is faster and more reliable
+Tested & working:
+- `stabilityai/stable-diffusion-2-1` (3.5GB, fast, ~3-5s, default)
+- `stabilityai/stable-diffusion-xl-base-1.0` (6GB, better quality, ~8-10s)
+
+With quantization (8GB M2):
+- `black-forest-labs/FLUX.1-schnell` (requires int8 quantization)
 
 ## Key Design Decisions
 
-- **No local inference**: all generation happens in HuggingFace cloud. No GPU, no Docker, no torch.
-- **503 retry loop**: HF cold-starts models; orchestrator retries up to `MODEL_LOAD_MAX_WAIT` seconds.
-- **No pytest/unit tests**: manual/live testing only. Test by actually running against the HF API.
+- **Local inference only**: No cloud API, no tokens (except optional for gated models)
+- **Float16 quantization**: Reduces model size, fits on 8GB M2/GPU VRAM
+- **Safety checker disabled**: Removes overhead, assumes responsible use
+- **Global pipeline cache**: Model loads once per process, subsequent calls are instant
+- **MPS-optimized for Apple Silicon**: Uses Metal Performance Shaders for native GPU support
+- **No pytest/unit tests**: Manual/live testing only. Test by actually running `flux-worker generate "test"`
 
 ## .env.example
 
 ```
-HF_TOKEN=
-# HF_MODEL=stabilityai/stable-diffusion-xl-base-1.0
+# Optional: which model to use
+# HF_MODEL=stabilityai/stable-diffusion-2-1
+
+# Optional: HF token for gated models
+# HF_TOKEN=hf_...
 ```
 
-## Config
+## Environment Variables
 
 | Env var | Required | Default | Description |
 |---|---|---|---|
-| `HF_TOKEN` | Yes | — | HuggingFace API token |
-| `HF_MODEL` | No | `stabilityai/stable-diffusion-xl-base-1.0` | Model ID |
+| `HF_MODEL` | No | `stabilityai/stable-diffusion-2-1` | Model ID from huggingface.co |
+| `HF_TOKEN` | No | — | HuggingFace token (only needed for gated models) |
 
 ## Installation for Development
 

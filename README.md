@@ -1,15 +1,18 @@
 # flux-worker
 
-Generate images via the [HuggingFace Inference API](https://huggingface.co/inference-api). Defaults to [Stable Diffusion XL](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0).
+Generate images locally on your machine. Uses [diffusers](https://github.com/huggingface/diffusers) library with [Stable Diffusion 2.1](https://huggingface.co/stabilityai/stable-diffusion-2-1) by default.
 
 - **Simple interface** — prompt in, image file out
-- **No GPU setup** — runs entirely through the HuggingFace cloud API
+- **Local inference** — runs entirely on your GPU, no API calls
+- **Free** — no tokens, no cloud bills
+- **Fast** — ~3-5 seconds per image on Apple Silicon or modern GPU
 - **Batch generation** — pass multiple prompts, images saved locally
 
-## Prerequisites
+## Requirements
 
-1. A [HuggingFace account](https://huggingface.co/join)
-2. A HuggingFace API token — [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+- **macOS (Apple Silicon)**: M1/M2/M3 or newer, 8GB+ RAM
+- **Linux/Windows**: NVIDIA GPU with 8GB+ VRAM (CUDA 11.8+)
+- **Storage**: ~2-4GB for model weights (one-time download)
 
 ## Installation
 
@@ -20,26 +23,32 @@ brew tap ddecoene/tap
 brew install flux-worker
 ```
 
-Then set your token:
+### Python library — pip or pipx
 
 ```bash
-export HF_TOKEN=hf_...
-# or put it in a .env file in your working directory
-```
-
-### Python library or agentic use — pip or pipx
-
-```bash
-# pipx: isolated install, also gives you the CLI
+# pipx: isolated install + CLI
 pipx install flux-worker
 
-# pip: install into your project environment
+# pip: install into your project
 pip install flux-worker
 ```
 
+### First run
+
+First time you generate an image, the model (~2.5GB) will download automatically from HuggingFace.
+
+```bash
+flux-worker generate "a cyclist at golden hour"
+# First run: downloading model (1-2 min)
+# Generating image 1/1: a cyclist at golden hour...
+# Saved: ./output/image_0.png
+```
+
+On subsequent runs, the model is cached — no download needed.
+
 ### Claude Code agent tool
 
-Add to your `CLAUDE.md` or system prompt:
+Add to your `CLAUDE.md`:
 
 ```
 You have access to flux-worker for generating images.
@@ -52,9 +61,8 @@ Or call directly from Python:
 ```python
 from flux_worker import generate
 
-def generate_image(prompt: str) -> str:
-    result = generate(prompt)
-    return str(result.images[0])
+result = generate("a cyclist at golden hour")
+print(result.images[0])  # Path to PNG
 ```
 
 ## Usage
@@ -66,16 +74,16 @@ def generate_image(prompt: str) -> str:
 flux-worker generate "a cyclist at golden hour in the Flemish polders"
 
 # Multiple prompts
-flux-worker generate "prompt one" "prompt two" "prompt three"
+flux-worker generate "a cyclist" "a runner" "a swimmer"
 
 # From JSON file
 flux-worker generate --prompts-file prompts.json
 
 # Custom output directory
-flux-worker generate "a cyclist at golden hour" --output ./my-images/
+flux-worker generate "a cyclist" --output ./my-images/
 
 # Use a different model
-flux-worker generate "a cyclist" --model stabilityai/stable-diffusion-2-1
+flux-worker generate "a cyclist" --model stabilityai/stable-diffusion-xl-base-1.0
 ```
 
 ### Python API
@@ -85,7 +93,8 @@ from flux_worker import generate
 
 # Single image
 result = generate("a cyclist at golden hour in the Flemish polders")
-print(result.images[0])  # Path to saved PNG
+if result.ok:
+    print(result.images[0])  # Path to saved PNG
 
 # Batch
 result = generate([
@@ -94,15 +103,16 @@ result = generate([
     "a swimmer at sunrise, aerial view",
 ])
 
-# All options
+# With custom settings
 result = generate(
-    prompts=["a cyclist at golden hour"],
+    prompts=["a cyclist"],
     output_dir="./images",
-    hf_token="hf_...",     # or set HF_TOKEN in .env
-    model="stabilityai/stable-diffusion-xl-base-1.0",  # optional
+    model="stabilityai/stable-diffusion-xl-base-1.0",
 )
-# result.ok — True/False
-# result.images — list[Path]
+
+# Check results
+print(f"Success: {result.ok}")
+print(f"Images: {result.images}")
 ```
 
 ### prompts.json format
@@ -113,12 +123,18 @@ result = generate(
 
 ## Environment Variables
 
-Place in a `.env` file in your working directory, or export in your shell.
+Optional. Place in a `.env` file or export in your shell:
 
-| Variable | Description | Required |
+| Variable | Description | Default |
 |---|---|---|
-| `HF_TOKEN` | HuggingFace API token | Yes |
-| `HF_MODEL` | Model ID to use | No (default: `stabilityai/stable-diffusion-xl-base-1.0`) |
+| `HF_MODEL` | Model ID from huggingface.co | `stabilityai/stable-diffusion-2-1` |
+| `HF_TOKEN` | HuggingFace token (for gated models) | — |
+
+### Recommended models
+
+- **Fast (~3-5s)**: `stabilityai/stable-diffusion-2-1` (default, 3.5GB)
+- **Better quality (~8-10s)**: `stabilityai/stable-diffusion-xl-base-1.0` (6GB, requires more VRAM)
+- **Experimental**: `black-forest-labs/FLUX.1-schnell` (requires quantization on M2)
 
 ## License
 
