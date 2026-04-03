@@ -4,7 +4,7 @@ import traceback
 import requests
 
 from flux_worker.config import load_config
-from flux_worker.exceptions import UserError
+from flux_worker.exceptions import UserError, FluxError
 from flux_worker.result import GenerateResult
 
 HF_API_BASE = "https://api-inference.huggingface.co/models"
@@ -59,13 +59,14 @@ def _generate_image(config, prompt: str, index: int):
 
         if resp.status_code == 503:
             if time.time() >= deadline:
-                raise RuntimeError(f"Model did not load within {MODEL_LOAD_MAX_WAIT}s.")
+                raise FluxError(f"Model did not load within {MODEL_LOAD_MAX_WAIT}s.")
             try:
                 wait = resp.json().get("estimated_time", 20)
             except Exception:
                 wait = 20
-            print(f"  Model loading, waiting {wait:.0f}s...")
-            time.sleep(min(wait, deadline - time.time()))
+            sleep_time = max(0.1, min(wait, deadline - time.time()))
+            print(f"  Model loading, waiting {sleep_time:.0f}s...")
+            time.sleep(sleep_time)
             continue
 
         resp.raise_for_status()
