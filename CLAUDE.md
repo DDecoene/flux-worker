@@ -4,9 +4,9 @@
 
 A Python package for local image generation using `diffusers` and PyTorch. Defaults to Stable Diffusion v1.5 (public, no auth required). Zero cost, runs entirely on your GPU.
 
-- **Python client** (`flux_worker/`) — local inference with diffusers, saves images locally, installable via pip
+- **Python client** (`flux_worker/`) — local inference with diffusers, saves images locally, installable via pip or from GitHub
 - No cloud API calls, no tokens required (optional for gated models)
-- Supports macOS (Apple Silicon) and Linux/Windows (NVIDIA GPU)
+- Currently supports **macOS Apple Silicon only** (MPS backend); CUDA/Linux not yet implemented
 
 ## Project Goals
 
@@ -21,7 +21,7 @@ A Python package for local image generation using `diffusers` and PyTorch. Defau
 
 - Python 3.10+, UV (never pip for dev)
 - `diffusers` library for model inference
-- `torch` for GPU computation (runs on MPS for Apple Silicon, CUDA for NVIDIA)
+- `torch` for GPU computation (MPS on Apple Silicon; CUDA not yet implemented)
 - Click for CLI
 - python-dotenv for .env support
 
@@ -44,7 +44,7 @@ flux_worker/
 1. generate(prompts) called
 2. load_config() reads HF_MODEL from env (default: runwayml/stable-diffusion-v1-5)
 3. First call only:
-   - Download model from HuggingFace Hub (~4GB, cached locally)
+   - Download model from HuggingFace Hub (~2.5GB, cached locally)
    - Load into GPU memory (float16 quantization for efficiency)
 4. For each prompt:
    - Run inference: pipeline(prompt, num_inference_steps=15)
@@ -91,9 +91,22 @@ With quantization (8GB M2):
 ## Installation for Development
 
 ```bash
-git clone https://github.com/ddecoene/flux-worker
+git clone https://github.com/DDecoene/flux-worker
 cd flux-worker
 uv sync
+```
+
+## Using as a Dependency in Another Project
+
+```bash
+# uv (recommended)
+uv add "flux-worker @ git+https://github.com/DDecoene/flux-worker.git"
+
+# pip
+pip install "flux-worker @ git+https://github.com/DDecoene/flux-worker.git"
+
+# Local editable (when both repos are on the same machine)
+uv add --editable ../flux-worker
 ```
 
 ## Testing

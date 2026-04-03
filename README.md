@@ -24,14 +24,19 @@ brew tap ddecoene/tap
 brew install flux-worker
 ```
 
-### Python library — pip or pipx
+### Python library — from GitHub
+
+Not yet published to PyPI. Install directly from GitHub:
 
 ```bash
-# pipx: isolated install + CLI
-pipx install flux-worker
+# uv (recommended)
+uv add "flux-worker @ git+https://github.com/DDecoene/flux-worker.git"
 
-# pip: install into your project
-pip install flux-worker
+# pip
+pip install "flux-worker @ git+https://github.com/DDecoene/flux-worker.git"
+
+# pipx (installs CLI into isolated env)
+pipx install "flux-worker @ git+https://github.com/DDecoene/flux-worker.git"
 ```
 
 ### First run
@@ -50,7 +55,7 @@ Subsequent calls are fast — model is cached in `~/.cache/huggingface/`.
 ### Using in your Python project
 
 ```bash
-pip install flux-worker
+uv add "flux-worker @ git+https://github.com/DDecoene/flux-worker.git"
 ```
 
 ```python
@@ -148,7 +153,7 @@ Optional. Place in a `.env` file or export in your shell:
 
 ### Recommended models
 
-- **Fast (~5-10s)**: `runwayml/stable-diffusion-v1-5` (default, 4GB) — public, requires no authentication
+- **Fast (~5-10s)**: `runwayml/stable-diffusion-v1-5` (default, ~2.5GB) — public, requires no authentication
 - **Better quality (~10-20s)**: `stabilityai/stable-diffusion-xl-base-1.0` (6GB, requires HF_TOKEN for gated access)
 - **Experimental**: `black-forest-labs/FLUX.1-schnell` (requires quantization on M2 and HF_TOKEN)
 
