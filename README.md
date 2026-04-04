@@ -1,18 +1,18 @@
 # imgforge
 
-Local image generation for Python. Uses [diffusers](https://github.com/huggingface/diffusers) with [Stable Diffusion v1.5](https://huggingface.co/runwayml/stable-diffusion-v1-5) by default.
+Local image generation for Python. Uses [FLUX.1-schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell) via [diffusers](https://github.com/huggingface/diffusers).
 
 - **Simple API** — `generate(prompts)` returns image paths
 - **Local inference** — runs on your GPU, no API calls, no cloud
-- **Free** — no tokens required for the default model
-- **Fast** — ~5-10 seconds per image on Apple Silicon
+- **Free** — no tokens required (FLUX.1-schnell is public)
+- **1280×720 output** — landscape format, ready for social media
 
 > **Platform**: macOS Apple Silicon (MPS) only. CUDA/Linux not yet supported.
 
 ## Requirements
 
-- macOS with M1/M2/M3 or newer, 8GB+ RAM
-- ~2.5GB storage for model weights (downloaded once, cached by HuggingFace)
+- macOS M1/M2/M3 or newer, 16GB+ RAM recommended
+- ~24GB storage for model weights (downloaded once, cached by HuggingFace)
 
 ## Installation
 
@@ -29,7 +29,13 @@ pip install "imgforge @ git+https://github.com/DDecoene/imgforge.git"
 Pin to a stable tag:
 
 ```bash
-uv add "imgforge @ git+https://github.com/DDecoene/imgforge.git@v0.2.0"
+uv add "imgforge @ git+https://github.com/DDecoene/imgforge.git@v0.2.2"
+```
+
+Local editable install (when repos are siblings on disk):
+
+```bash
+uv add --editable ../imgforge
 ```
 
 ## Usage
@@ -51,11 +57,10 @@ result = generate([
     "a swimmer at sunrise, aerial view",
 ])
 
-# Custom output directory or model
+# Custom output directory
 result = generate(
     prompts=["a cyclist"],
     output_dir="./my-images",
-    model="stabilityai/stable-diffusion-xl-base-1.0",
 )
 
 print(result.ok)      # True on success
@@ -67,7 +72,7 @@ print(result.images)  # [PosixPath('./my-images/image_0.png')]
 | Field | Type | Description |
 |---|---|---|
 | `ok` | `bool` | `True` on success |
-| `images` | `list[Path]` | Paths to generated PNGs |
+| `images` | `list[Path]` | Paths to generated PNGs (1280×720) |
 | `error_type` | `str \| None` | `"user_error"` or `"unexpected"` |
 | `error_message` | `str \| None` | Human-readable error |
 | `traceback` | `str \| None` | Full traceback on unexpected errors |
@@ -76,14 +81,8 @@ print(result.images)  # [PosixPath('./my-images/image_0.png')]
 
 | Variable | Default | Description |
 |---|---|---|
-| `HF_MODEL` | `runwayml/stable-diffusion-v1-5` | Model ID from huggingface.co |
-| `HF_TOKEN` | — | HuggingFace token (only for gated models) |
-
-## Models
-
-- **Default (~5-10s, ~2.5GB)**: `runwayml/stable-diffusion-v1-5` — public, no auth required
-- **Better quality (~10-20s, ~6GB)**: `stabilityai/stable-diffusion-xl-base-1.0` — requires `HF_TOKEN`
-- **Experimental**: `black-forest-labs/FLUX.1-schnell` — requires `HF_TOKEN` and quantization
+| `HF_MODEL` | `black-forest-labs/FLUX.1-schnell` | Model ID from huggingface.co |
+| `HF_TOKEN` | — | HuggingFace token (not required for FLUX.1-schnell) |
 
 ## Using with Claude Code or other AI agents
 
@@ -94,17 +93,19 @@ Add to your project's `CLAUDE.md`:
 
 This project uses imgforge for local image generation (Apple Silicon only).
 
-Install: `uv add "imgforge @ git+https://github.com/DDecoene/imgforge.git"`
+Install: `uv add --editable ../imgforge` (local) or
+         `uv add "imgforge @ git+https://github.com/DDecoene/imgforge.git"`
 
 ```python
 from imgforge import generate
 
 result = generate("your prompt here", output_dir="./output")
 # result.ok (bool), result.images (list of Path), result.error_message (str)
+# Output images are 1280×720 PNG
 ```
 
-- No API keys needed for the default model
-- First run downloads ~2.5GB model — subsequent calls are instant (cached)
+- No API keys needed
+- First run downloads ~24GB model — subsequent calls are instant (cached)
 - Images saved as PNG to output_dir/image_{i}.png
 ```
 

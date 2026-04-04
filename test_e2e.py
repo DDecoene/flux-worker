@@ -6,7 +6,7 @@ from pathlib import Path
 # Add repo to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from flux_worker import generate
+from imgforge import generate
 
 if __name__ == "__main__":
     result = generate(
