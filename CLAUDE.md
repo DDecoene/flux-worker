@@ -4,8 +4,8 @@
 
 A Python library for local image generation using `diffusers` and PyTorch. No CLI. Pure Python API.
 
-- Uses FLUX.1-schnell by default — fast, high quality, public (no HF_TOKEN required)
-- Runs entirely on Apple Silicon (MPS) — no cloud, no API calls
+- Uses Stable Diffusion v1.5 — fits in 8GB RAM, runs on Apple Silicon (MPS)
+- No cloud, no API calls, no tokens required
 - Used as an editable dependency by `social-agent` (sibling repo)
 
 ## API
@@ -28,7 +28,7 @@ result = generate(prompts, output_dir="./output", model=None, hf_token=None)
 ```
 imgforge/
 ├── __init__.py       # public API: generate()
-├── orchestrator.py   # loads FluxPipeline, runs inference, saves images
+├── orchestrator.py   # loads StableDiffusionPipeline, runs inference, saves images
 ├── config.py         # Config dataclass + env loading
 ├── result.py         # GenerateResult dataclass
 ├── exceptions.py     # UserError, ImgForgeError
@@ -39,13 +39,13 @@ imgforge/
 
 ```
 1. generate(prompts) called
-2. load_config() reads HF_MODEL from env (default: black-forest-labs/FLUX.1-schnell)
+2. load_config() reads HF_MODEL from env (default: runwayml/stable-diffusion-v1-5)
 3. First call only:
-   - Download model from HuggingFace Hub (~24GB, cached locally)
-   - Load into GPU memory (bfloat16 on MPS — float16 produces black images with FLUX)
+   - Download model from HuggingFace Hub (~2.5GB, cached locally)
+   - Load into GPU memory with float32 on MPS
    - enable_attention_slicing() to reduce MPS memory pressure
 4. For each prompt:
-   - Run inference: pipeline(prompt, num_inference_steps=4, guidance_scale=0.0)
+   - Run inference: pipeline(prompt, num_inference_steps=20)
    - Output size: 1280×720 (landscape, for social media)
    - Save PNG to output_dir/image_{i}.png
 5. Return GenerateResult(ok=True, images=[...])
@@ -53,10 +53,10 @@ imgforge/
 
 ## Key Design Decisions
 
-- **FluxPipeline, not StableDiffusionPipeline** — FLUX.1 requires its own pipeline class
-- **bfloat16 on MPS** — float16 causes black images with FLUX on Apple Silicon
-- **num_inference_steps=4, guidance_scale=0.0** — FLUX.1-schnell is guidance-distilled; these are the correct settings
+- **float32 on MPS, not float16** — float16 produces black images on Apple Silicon with SD v1.5
+- **StableDiffusionPipeline** — SD v1.5 fits in 8GB; FLUX.1 requires 24GB+
 - **1280×720 output** — landscape format for social media use
+- **Safety checker disabled** — removes overhead
 - **No CLI** — library only; callers use the Python API directly
 - **MPS only** — hardcoded `_PIPELINE.to("mps")`; CUDA not implemented
 - **Global pipeline cache** — model loads once per process, subsequent calls are instant
@@ -66,8 +66,8 @@ imgforge/
 
 | Env var | Required | Default | Description |
 |---|---|---|---|
-| `HF_MODEL` | No | `black-forest-labs/FLUX.1-schnell` | Model ID |
-| `HF_TOKEN` | No | — | HuggingFace token (kept for gated model support) |
+| `HF_MODEL` | No | `runwayml/stable-diffusion-v1-5` | Model ID |
+| `HF_TOKEN` | No | — | HuggingFace token (for gated models) |
 
 ## Installation as a Dependency
 

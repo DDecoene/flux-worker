@@ -1,5 +1,5 @@
 import traceback
-from diffusers import FluxPipeline
+from diffusers import StableDiffusionPipeline
 import torch
 
 from imgforge.config import load_config
@@ -42,9 +42,10 @@ def _get_pipeline(model_id: str, hf_token: str | None = None):
     global _PIPELINE
     if _PIPELINE is None:
         try:
-            _PIPELINE = FluxPipeline.from_pretrained(
+            _PIPELINE = StableDiffusionPipeline.from_pretrained(
                 model_id,
-                torch_dtype=torch.bfloat16,  # bfloat16 required on MPS — float16 produces black images
+                torch_dtype=torch.float32,  # float32 on MPS — float16 produces black images
+                safety_checker=None,
                 token=hf_token,
             )
             _PIPELINE.to("mps")
@@ -59,8 +60,7 @@ def _generate_image(config, prompt: str, index: int):
         pipeline = _get_pipeline(config.model, hf_token=config.hf_token)
         image = pipeline(
             prompt,
-            num_inference_steps=4,   # FLUX.1-schnell optimal
-            guidance_scale=0.0,      # FLUX.1-schnell is guidance-distilled
+            num_inference_steps=20,
             width=1280,
             height=720,
         ).images[0]

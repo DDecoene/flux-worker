@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_MODEL = "black-forest-labs/FLUX.1-schnell"
+DEFAULT_MODEL = "runwayml/stable-diffusion-v1-5"
 
 
 @dataclass

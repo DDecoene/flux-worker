@@ -1,18 +1,18 @@
 # imgforge
 
-Local image generation for Python. Uses [FLUX.1-schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell) via [diffusers](https://github.com/huggingface/diffusers).
+Local image generation for Python. Uses [Stable Diffusion v1.5](https://huggingface.co/runwayml/stable-diffusion-v1-5) via [diffusers](https://github.com/huggingface/diffusers). Designed for 8GB Apple Silicon machines.
 
 - **Simple API** — `generate(prompts)` returns image paths
 - **Local inference** — runs on your GPU, no API calls, no cloud
-- **Free** — no tokens required (FLUX.1-schnell is public)
+- **Free** — no tokens required
 - **1280×720 output** — landscape format, ready for social media
 
 > **Platform**: macOS Apple Silicon (MPS) only. CUDA/Linux not yet supported.
 
 ## Requirements
 
-- macOS M1/M2/M3 or newer, 16GB+ RAM recommended
-- ~24GB storage for model weights (downloaded once, cached by HuggingFace)
+- macOS M1/M2/M3 or newer, 8GB RAM
+- ~2.5GB storage for model weights (downloaded once, cached by HuggingFace)
 
 ## Installation
 
@@ -29,7 +29,7 @@ pip install "imgforge @ git+https://github.com/DDecoene/imgforge.git"
 Pin to a stable tag:
 
 ```bash
-uv add "imgforge @ git+https://github.com/DDecoene/imgforge.git@v0.2.2"
+uv add "imgforge @ git+https://github.com/DDecoene/imgforge.git@v0.3.1"
 ```
 
 Local editable install (when repos are siblings on disk):
@@ -81,8 +81,8 @@ print(result.images)  # [PosixPath('./my-images/image_0.png')]
 
 | Variable | Default | Description |
 |---|---|---|
-| `HF_MODEL` | `black-forest-labs/FLUX.1-schnell` | Model ID from huggingface.co |
-| `HF_TOKEN` | — | HuggingFace token (not required for FLUX.1-schnell) |
+| `HF_MODEL` | `runwayml/stable-diffusion-v1-5` | Model ID from huggingface.co |
+| `HF_TOKEN` | — | HuggingFace token (not required for the default model) |
 
 ## Using with Claude Code or other AI agents
 
@@ -91,7 +91,7 @@ Add to your project's `CLAUDE.md`:
 ```markdown
 ## Image generation
 
-This project uses imgforge for local image generation (Apple Silicon only).
+This project uses imgforge for local image generation (Apple Silicon only, 8GB RAM).
 
 Install: `uv add --editable ../imgforge` (local) or
          `uv add "imgforge @ git+https://github.com/DDecoene/imgforge.git"`
@@ -105,7 +105,7 @@ result = generate("your prompt here", output_dir="./output")
 ```
 
 - No API keys needed
-- First run downloads ~24GB model — subsequent calls are instant (cached)
+- First run downloads ~2.5GB model — subsequent calls are instant (cached)
 - Images saved as PNG to output_dir/image_{i}.png
 ```
 
