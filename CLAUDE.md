@@ -76,20 +76,20 @@ imgforge/
 
 ```bash
 # uv
-uv add "imgforge @ git+https://github.com/DDecoene/flux-worker.git"
+uv add "imgforge @ git+https://github.com/DDecoene/imgworker.git"
 
 # pip
-pip install "imgforge @ git+https://github.com/DDecoene/flux-worker.git"
+pip install "imgforge @ git+https://github.com/DDecoene/imgworker.git"
 
 # Local editable (when both repos on same machine)
-uv add --editable ../flux-worker
+uv add --editable ../imgworker
 ```
 
 ## Development Setup
 
 ```bash
-git clone https://github.com/DDecoene/flux-worker
-cd flux-worker
+git clone https://github.com/DDecoene/imgworker
+cd imgworker
 uv sync
 ```
 
