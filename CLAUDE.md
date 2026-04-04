@@ -76,20 +76,20 @@ imgforge/
 
 ```bash
 # uv
-uv add "imgforge @ git+https://github.com/DDecoene/imgworker.git"
+uv add "imgforge @ git+https://github.com/DDecoene/imgforge.git"
 
 # pip
-pip install "imgforge @ git+https://github.com/DDecoene/imgworker.git"
+pip install "imgforge @ git+https://github.com/DDecoene/imgforge.git"
 
 # Local editable (when both repos on same machine)
-uv add --editable ../imgworker
+uv add --editable ../imgforge
 ```
 
 ## Development Setup
 
 ```bash
-git clone https://github.com/DDecoene/imgworker
-cd imgworker
+git clone https://github.com/DDecoene/imgforge
+cd imgforge
 uv sync
 ```
 

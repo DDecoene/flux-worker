@@ -20,16 +20,16 @@ Not yet on PyPI. Install directly from GitHub:
 
 ```bash
 # uv (recommended)
-uv add "imgforge @ git+https://github.com/DDecoene/imgworker.git"
+uv add "imgforge @ git+https://github.com/DDecoene/imgforge.git"
 
 # pip
-pip install "imgforge @ git+https://github.com/DDecoene/imgworker.git"
+pip install "imgforge @ git+https://github.com/DDecoene/imgforge.git"
 ```
 
 Pin to a stable tag:
 
 ```bash
-uv add "imgforge @ git+https://github.com/DDecoene/imgworker.git@v0.2.0"
+uv add "imgforge @ git+https://github.com/DDecoene/imgforge.git@v0.2.0"
 ```
 
 ## Usage
@@ -94,7 +94,7 @@ Add to your project's `CLAUDE.md`:
 
 This project uses imgforge for local image generation (Apple Silicon only).
 
-Install: `uv add "imgforge @ git+https://github.com/DDecoene/imgworker.git"`
+Install: `uv add "imgforge @ git+https://github.com/DDecoene/imgforge.git"`
 
 ```python
 from imgforge import generate

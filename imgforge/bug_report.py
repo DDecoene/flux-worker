@@ -3,7 +3,7 @@ import platform
 import urllib.parse
 from importlib.metadata import version
 
-GITHUB_REPO = "DDecoene/imgworker"
+GITHUB_REPO = "DDecoene/imgforge"
 ISSUES_URL = f"https://github.com/{GITHUB_REPO}/issues"
 
 
